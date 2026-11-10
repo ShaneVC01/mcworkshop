@@ -1,0 +1,126 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@fontsource-variable/oswald';
+@import '@fontsource-variable/inter';
+@import './tokens.css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-display: 'Oswald Variable', 'Arial Narrow', sans-serif;
+  --font-sans: 'Inter Variable', system-ui, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chrome: var(--chrome);
+  --color-chrome-raised: var(--chrome-raised);
+  --color-chrome-foreground: var(--chrome-foreground);
+  --color-chrome-foreground-active: var(--chrome-foreground-active);
+  --color-chrome-accent: var(--chrome-accent);
+
+  --color-status-confirmed: var(--status-confirmed);
+  --color-status-checked-in: var(--status-checked-in);
+  --color-status-in-progress: var(--status-in-progress);
+  --color-status-approval: var(--status-approval);
+  --color-status-parts: var(--status-parts);
+  --color-status-blocked: var(--status-blocked);
+  --color-status-unavailable: var(--status-unavailable);
+  --color-status-tentative: var(--status-tentative);
+  --color-status-complete: var(--status-complete);
+
+  --color-sync-synced: var(--sync-synced);
+  --color-sync-pending: var(--sync-pending);
+  --color-sync-failed: var(--sync-failed);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: var(--radius);
+  --radius-xl: 14px;
+
+  --shadow-button: var(--shadow-button);
+  --shadow-card: var(--shadow-card);
+
+  /* Touch targets: 44px minimum everywhere, 56px for technician primary actions. */
+  --spacing-touch: 44px;
+  --spacing-touch-lg: 56px;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    min-height: 100dvh;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: 0.005em;
+  }
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tentative bookings: hatched fill, per the PRD. */
+@utility hatched {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--status-tentative) 22%, transparent) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}

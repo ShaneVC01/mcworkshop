@@ -2,48 +2,120 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current state
+## Project
 
-This repository is pre-implementation. It contains only [docs/PRD.md](docs/PRD.md), the product requirements for **McCormack Workshop OS**. There is no source code, package manifest, build, lint or test tooling yet, and no git repository. Do not invent commands. When scaffolding begins, add the real commands here.
+A custom workshop management app for McCormacks 4WD (Sandgate, Brisbane QLD). Phase 1 covers the 4WD servicing division only. The 4x4 custom build division comes later, so the domain model carries a `division` field and must stay extensible.
 
-Read the PRD before building anything. It is the single source of truth and ends with a "Final build specification for the coding agent" section that serves as the build brief. Ignore the `citeturn...` markers scattered through the PRD, which are citation artefacts rather than content.
+The business runs Oracle NetSuite, **production only, with no sandbox**. NetSuite is the system of record. This app gives staff a simple UI built for a mechanic business while NetSuite stays in the background. All NetSuite complexity lives in the integration layer and the UI never exposes NetSuite concepts or wording.
 
-## What is being built
+Phase 1 is a complete prototype on mock data: **no database tables**. The only live connection is a read only NetSuite test on Admin, Integration, which calls the `customers-list` Edge Function on the Supabase project **McWorkshop** (`xckqgweflvfstbvppmsy`).
 
-A responsive web app that replaces the day to day Oracle NetSuite Field Service Management (FSM) experience for McCormack 4x4, an automotive workshop. **NetSuite stays the system of record** for accounting, inventory, billing and durable records. The app is an operational UI over it. Three experiences:
+Read these before building:
 
-- **Workshop Planner**: resource timeline calendar (mechanics as rows, time horizontal), booking, capacity and the Workshop command board (status columns).
-- **Service Advisor Workspace**: registration and customer search, service templates, quoting, approvals, vehicle timeline.
-- **Mechanic Workspace**: tablet first, touch only shell (My Day, Current Job, Completed) with checklists, findings, photos and time tracking.
+- [docs/PRD.md](docs/PRD.md): product requirements. Ignore its `citeturn...` citation artefacts. Where it conflicts with this file (stack, Next.js, Prisma, FullCalendar, provider class), this file wins.
+- [docs/brand.md](docs/brand.md): brand tokens, tone of voice and services.
+- [docs/env.md](docs/env.md): secret names only.
+- The approved plan: `~/.claude/plans/pasted-content-id-b668-read-docs-prd-md-hashed-oasis.md` (roles, routes, domain model, data function list and build slices).
 
-Users must only ever see customers, registrations, vehicles, technicians, bays, service operations and workshop hours. No ERP or NetSuite terminology in the UI, except an explicit "Open NetSuite" link and the admin integration diagnostics.
+## Commands
 
-## Architecture rules that span the codebase
+```
+npm run dev         # Vite dev server
+npm run typecheck   # tsc -b
+npm run lint        # eslint .
+npm run build       # tsc -b && vite build
+npm run preview     # serve the production build
+npm run deploy      # build then wrangler deploy (ask before running)
+```
 
-- **The browser never calls NetSuite.** UI calls a Workshop Application API, which holds auth/RBAC, domain services (booking and capacity engines), audit log, cache, and a sync outbox with a job queue. A server side NetSuite adapter sits behind that.
-- **Provider abstraction is mandatory.** All frontend code works only against the canonical `WorkshopERPProvider` interface (defined in the PRD). Two implementations are required: `MockWorkshopProvider` and `NetSuiteWorkshopProvider`. The app must run entirely on mock data, and swapping providers must not require UI changes. No NetSuite record types, field names or internal IDs may appear in React components.
-- **Canonical domain model** (Customer, Vehicle, Technician, Bay, Booking, WorkshopJob, LaborOperation, ChecklistItem, Finding, Quote, TimeEntry, ActivityEvent) is defined in the PRD. Registration number is the display identifier for vehicles, but a durable ID (such as the NetSuite internal ID) is the integration key.
-- **Local read model.** Reads come from a local projection or cache, never straight from NetSuite on each calendar pan or filter. Writes validate, persist the intent or event, send to NetSuite, confirm, then update the projection. A failed NetSuite write must be visible and retried, never silently dropped. The UI shows local save and NetSuite sync status separately.
-- **NetSuite integration pathways.** Classify each operation as (A) standard SuiteTalk REST record, (B) SuiteQL read model, or (C) a custom RESTlet for FSM specific behaviour (start or finish work, service reports, task team assignment, time tracking). Prefer A and B. Do not assume undocumented FSM internals are a stable API, and do not write FSM completion fields directly, because completion has side effects such as creating time bills.
-- **Field mappings are unconfirmed.** The PRD's mapping table (Vehicle to FSM Asset or custom record, Booking to Task or custom record, and so on) is explicitly "to be confirmed" against the real McCormack account. Keep every mapping in the adapter layer, behind configuration.
-- **Integration robustness.** OAuth 2.0 only (no username/password or TBA), with secrets server side. Use a bounded concurrency queue, exponential backoff with jitter on HTTP 429, external IDs and idempotency keys, correlation IDs, and a structured integration error log (fields listed in the PRD).
-- **Explicit job state machine.** `BOOKED`, `CONFIRMED`, `CHECKED_IN`, `READY_FOR_WORK`, `IN_PROGRESS`, `WAITING_APPROVAL`, `WAITING_PARTS`, `BLOCKED`, `TECH_COMPLETE`, `QUALITY_CHECK`, `READY_FOR_CUSTOMER`, `CLOSED`. Every state change writes an immutable `ActivityEvent`. Finding approval status is independent of overall job status, so authorised work can continue while other work awaits approval.
-- **Capacity maths.** Available = shift minus breaks, leave, training and blocked time. Free = Available minus Booked. Utilisation = Booked / Available. Technician availability and bay availability are separate constraints, and double booking a mechanic needs an explicit authorised override.
-- **Roles:** Advisor, Workshop Controller, Mechanic, Manager, Administrator. The permission matrix is in the PRD. Mechanics must not see profitability figures unless enabled.
+`src/routeTree.gen.ts` is generated by the TanStack Router Vite plugin. If typecheck fails on a new route, run `npx vite build` once to regenerate it.
 
-## Recommended stack (from the PRD, a recommendation not a mandate)
+There is no unit test runner yet. Browser checks run through the Playwright MCP "run code" tool against the dev server on port 5183 (`npx vite --port 5183 --strictPort`):
 
-Next.js, React, TypeScript, Tailwind, shadcn/ui, TanStack Query, FullCalendar Scheduler (or an equivalent resource timeline), React Hook Form with Zod, PostgreSQL with Prisma, optional Redis, Microsoft Entra ID or OIDC for auth, and an object storage abstraction for photos. The PRD states that the architectural separation matters more than the framework choice.
+- `scripts/e2e.js`: the PRD's 20 step scenario end to end (book, start, inspect, finding with photo, quote, approve, complete, board, timeline). It resets the demo data first. Run it after any change to the data layer or the booking, mechanic or advisor screens.
+- `scripts/shots.js`: screenshots of the office routes at 390, 820 and 1440px into `screenshots/`, reporting horizontal overflow.
+- `python scripts/montage.py out.png a.png b.png`: joins screenshots side by side for review.
 
-## Planned routes
+## Where things live
 
-`/today`, `/calendar`, `/bookings/new`, `/bookings/:id`, `/workshop`, `/vehicles/:id`, `/mechanic`, `/mechanic/jobs/:id`, `/mechanic/jobs/:id/inspection`, `/mechanic/jobs/:id/findings/new`, `/reports`, `/admin/integration`.
+- `src/types/index.ts`: the domain model. `src/lib`: formatting (`format.ts`), capacity maths and conflict checks (`capacity.ts`), the job state machine (`job-state.ts`).
+- `src/data/queries.ts` (reads), `src/data/actions.ts` (writes), `src/data/hooks.ts` (the only thing screens import). `src/data/mock/` holds the seed and the mock engine (localStorage persistence, latency, outbox, cross tab updates). Screens must not import from `src/data/mock`.
+- `src/auth`: mock session and the permission matrix.
+- `src/components/shell`: adaptive shell, search, theme, install prompt. `src/components/states`: loading, empty, error, offline and `DataView`. `src/components/domain`: `RegoPlate`, `StatusPill`, `SyncBadge`, `JobTile`, `CapacityBar`.
+- `src/routes/_office/*`: office screens (pathless layout, so URLs have no prefix). `src/routes/mechanic/*`: technician screens. `src/features/planner`: the timeline.
+- Demo data is seeded around the current working day and stored in the browser. Reset it from Admin, Integration (sign in as Rickie or Bodie McCormack), or bump `DB_VERSION` in `src/data/mock/seed.ts` after changing the seed or the types.
 
-## Constraints to keep in mind
+## Stack
 
-- **Mechanic UI:** 48 px or larger touch targets, no hover dependent interaction, no nested menus, registration visible on every job screen, checklist autosave (no page level Save), at most two taps from job screen to finding capture, portrait tablet first. Required checklist items must block job completion.
-- **Colour is never the only signal.** Calendar and board states need text or icons too (colour semantics are tabulated in the PRD).
-- **Out of scope for the first prototype:** accounting, GL, procurement, payroll, full inventory, payments, full CRM, manufacturer repair data, parts catalogue integrations, AI scheduling, customer self booking and invoicing replacement. Offline mechanic mode is also deferred.
-- **Seed data:** six mechanics, four bays, twenty 4x4 vehicles, thirty bookings across a week, technician leave and one absence, one over capacity day, unassigned jobs, parts waiting and approval waiting jobs. Do not present demo service schedules as accurate manufacturer data.
-- **Prototype done test:** the 20 step end to end scenario in the PRD (search "923XYZ", book a 120,000 km service, mechanic executes, brake finding, additional work quote and approval, tech complete, vehicle timeline). A standard booking should take under a minute.
-- **Spelling:** the product copy uses Australian English (for example "labour", "utilisation"), but the PRD's type definitions use `laborHours` style identifiers. Follow the PRD's identifiers in code.
+Vite, React, TypeScript, Tailwind v4, shadcn/ui, TanStack Router (file based, `src/routes`), TanStack Query and vite-plugin-pwa. **Do not use Next.js or TanStack Start.** Hosting is Cloudflare Workers serving static assets (`wrangler.jsonc`, SPA fallback). The backend will be Supabase (auth, Postgres with RLS, Realtime, Storage and Edge Functions). The planner timeline is custom built with dnd-kit, not FullCalendar.
+
+## Architecture rules
+
+1. **Components never call Supabase or NetSuite directly.** All data goes through the typed data layer in `src/data`. Each function is named for a business action, for example `getJobCards()` or `approveQuote(id)`. ESLint blocks `@supabase/*` imports.
+2. For now every data function returns realistic mock data for a 4WD servicing workshop, with simulated latency and occasional errors.
+3. We define our own domain model (customer, vehicle, booking, job card, inspection, quote, parts line, labour line, invoice, technician and so on). Shared types live in `src/types` so generated Supabase types can replace them later. No NetSuite record types, field names or internal IDs anywhere outside the integration layer.
+4. Target design for later phases: reads come from Supabase tables synced from NetSuite using SuiteQL. Writes go through an outbox table and a queue to NetSuite via Edge Functions, with retries and idempotency. **Every data function exposes a sync status (`synced`, `pending` or `failed`) and the UI shows it.**
+5. Auth is mocked, with the roles from the PRD: Advisor, Workshop Controller, Mechanic, Manager and Administrator.
+6. `supabase/` holds migrations and Edge Functions. Do not create tables yet.
+7. Keep these current in every slice:
+   - `docs/netsuite-mapping.md`: each domain entity, its likely NetSuite record, fields, and whether it is read, write or both.
+   - `docs/supabase-handover.md`: every data function with its intended query, RLS needs and whether it becomes a view, RPC or Edge Function.
+8. Every job state change writes an immutable activity event. Job states are the 12 explicit states in the PRD.
+9. Invoices are a read only summary. The app never creates or edits invoices.
+
+## Edge Functions (NetSuite backed API endpoints)
+
+Full contract, error codes and the add-an-endpoint checklist are in [docs/supabase-handover.md](docs/supabase-handover.md).
+
+- **One Edge Function per business use case** (kebab case action names such as `customers-list`), not a single gateway. Each one may call several NetSuite APIs underneath. Other applications will call these endpoints too.
+- **Every function is wrapped in `withApiKey`** (`supabase/functions/_shared/http/api-key.ts`). Callers send `x-api-key` matching the `EDGE_API_KEY` secret. Each function has `verify_jwt = false` in `supabase/config.toml`, so forgetting `withApiKey` leaves it open.
+- **`_shared/netsuite` is the only code that calls NetSuite** (`netsuiteFetch`, `runSuiteQL`). It handles the client credentials token, concurrency, retries and timeouts. Return our own field names, never NetSuite's.
+- **Writes go through `guardWrite`** (`_shared/netsuite/write-guard.ts`) and stay dry run until Shane approves that specific write.
+- **Logs and terminal output never contain** the API key, tokens, the JWT assertion or customer data. When testing against NetSuite, print counts, field names and `meta` only. Do not screenshot screens that show real customer records.
+- In the app, Edge Functions are called only from `src/data` through `callEdgeFunction` (`src/data/edge.ts`). `VITE_EDGE_API_KEY` in the browser is a prototype only shortcut (see [docs/env.md](docs/env.md)).
+
+Commands (the CLI is linked to the project):
+
+```
+supabase functions deploy customers-list --project-ref xckqgweflvfstbvppmsy --use-api
+supabase secrets list --project-ref xckqgweflvfstbvppmsy
+supabase functions logs customers-list --project-ref xckqgweflvfstbvppmsy
+```
+
+Type check functions with Deno on a copy outside the repo (the root `package.json` confuses `deno check`): copy `supabase/functions` to a scratch folder and run `npx -y deno@2 check <function>/index.ts` there.
+
+## NetSuite safety rules (production only)
+
+1. Server to server OAuth 2 credentials exist and will be stored as Supabase secrets. **Never read, print, log or commit secret values.** Only list secret names, in `docs/env.md`.
+2. Phase 1 and early integration work are read only. Any NetSuite write function must sit behind a feature flag (`NETSUITE_WRITE_MODE`) that defaults to dry run, logging the payload instead of sending it.
+3. **Never write to NetSuite without Shane's explicit approval in the conversation.** Approval for one write does not carry over to the next.
+4. Respect NetSuite concurrency limits with a throttled request queue, with backoff and jitter on HTTP 429.
+
+## Locale
+
+Australian English (labour, tyre, colour, utilisation). AUD with GST at 10 percent, stored as integer cents ex GST and shown inc GST with the GST component. Dates as DD/MM/YYYY. Timezone Australia/Brisbane. Odometer in km. Australian registration plates with state (default QLD). All formatting goes through `src/lib/format.ts`.
+
+## UI rules
+
+1. Desktop, tablet and phone are all first class. Adaptive shell: sidebar on desktop, navigation rail on tablet and bottom tab bar on phone. Design for a noisy workshop, with the tablet as the main technician device, big touch targets and quick actions.
+2. Mobile first Tailwind, container queries, `dvh` units, safe area insets, 44px minimum touch targets (`min-h-touch`, 56px `min-h-touch-lg` for technician primary actions) and no hover only interactions.
+3. Every screen needs loading, empty, error, offline and sync status states.
+4. Use the `frontend-design` skill for UI work so screens look clean, intentional and on brand, not templated.
+5. Brand: only use tokens from `src/styles/tokens.css` (never raw hex in components). Oswald (`font-display`) for headings, navigation, buttons and plates, Inter for everything else. Uppercase only on buttons and plates. The `RegoPlate` component leads every vehicle card and header.
+6. Status colour is never the only signal. Use `StatusPill` and `status-tones.ts`, which pair colour with an icon and label. Use `SyncBadge` for sync state and never show the word NetSuite to staff.
+7. Workshop wording only: vehicle, rego, job, bay, technician, hours. Buttons say what happens ("Confirm booking", "Start job").
+
+## PWA rules
+
+Manifest with maskable icons, service worker for app shell caching, install prompt and iOS home screen support. Offline data is out of scope: show an offline banner and retry while the app is open.
+
+## Process
+
+1. Build the layout shell first, then one vertical slice at a time, in the order in the approved plan. Brand tokens need Shane's approval before any screens are built.
+2. After each slice, use Playwright to screenshot every changed screen at 390, 820 and 1440px wide (into `screenshots/`, which is git ignored) and fix layout issues, including horizontal overflow.
+3. Run typecheck, lint and build before finishing each slice.
+4. Commit or push only when asked.
+
+## Writing style for docs and replies
+
+Australian English. No Oxford commas, no em dashes, and no hyphens used as dashes in sentences. Markdown docs start with YAML frontmatter (`type`, `status`, `tags`, `relatedTo`), except this file.

@@ -1,0 +1,103 @@
+/*
+ * McCormacks 4WD brand tokens. Source of truth: docs/brand.md.
+ * Extracted from mccormacks4wd.com.au (Oswald, black, white, green #368846, 10px radius).
+ * shadcn/ui variable names are kept so shadcn components pick the brand up unchanged.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #121212;
+  --card: #ffffff;
+  --card-foreground: #121212;
+  --popover: #ffffff;
+  --popover-foreground: #121212;
+  --primary: #368846;
+  --primary-hover: #2e753c;
+  --primary-strong: #2a6e38;
+  --primary-foreground: #ffffff;
+  --secondary: #f7f7f7;
+  --secondary-foreground: #121212;
+  --muted: #f7f7f7;
+  --muted-foreground: #5c5c5c;
+  --accent: #eef6ef;
+  --accent-foreground: #1f5229;
+  --destructive: #c62828;
+  --destructive-foreground: #ffffff;
+  --border: #e4e4e4;
+  --input: #cfcfcf;
+  --ring: #368846;
+  --radius: 10px;
+
+  /* App chrome: sidebar, rail, tab bar, top bar. True black, as on the website. */
+  --chrome: #000000;
+  --chrome-raised: #1c1c1c;
+  --chrome-foreground: rgb(255 255 255 / 0.75);
+  --chrome-foreground-active: #ffffff;
+  --chrome-accent: #45ad5a; /* the logo green, used on black only */
+
+  /* Operational status. Always paired with an icon and a label, never colour alone. */
+  --status-confirmed: #0f7b6c;
+  --status-checked-in: #2563c9;
+  --status-in-progress: #7b3fc4;
+  --status-approval: #a8690a;
+  --status-parts: #c2500e;
+  --status-blocked: #c62828;
+  --status-unavailable: #6b6b6b;
+  --status-tentative: #6b6b6b;
+  --status-complete: #121212;
+
+  /* Sync with the back office system. */
+  --sync-synced: #5c5c5c;
+  --sync-pending: #a8690a;
+  --sync-failed: #c62828;
+
+  /* Registration plates. */
+  --plate-bg: #ffffff;
+  --plate-qld: #7a1232;
+  --plate-nsw: #121212;
+  --plate-vic: #1b3f8f;
+  --plate-other: #121212;
+
+  --shadow-button: 0 4px 10px rgb(0 0 0 / 0.2);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 12px rgb(0 0 0 / 0.05);
+}
+
+.dark {
+  --background: #0e0e0e;
+  --foreground: #f5f5f5;
+  --card: #161616;
+  --card-foreground: #f5f5f5;
+  --popover: #161616;
+  --popover-foreground: #f5f5f5;
+  --primary: #3e9a50;
+  --primary-hover: #48a85b;
+  --primary-strong: #57b36a;
+  --primary-foreground: #ffffff;
+  --secondary: #1c1c1c;
+  --secondary-foreground: #f5f5f5;
+  --muted: #1c1c1c;
+  --muted-foreground: #a3a3a3;
+  --accent: #17301c;
+  --accent-foreground: #a9dcb3;
+  --destructive: #ef5350;
+  --destructive-foreground: #121212;
+  --border: #2a2a2a;
+  --input: #3a3a3a;
+  --ring: #57b36a;
+
+  --status-confirmed: #3cc4b0;
+  --status-checked-in: #6ea0f5;
+  --status-in-progress: #b58af0;
+  --status-approval: #e5a93a;
+  --status-parts: #f08a4b;
+  --status-blocked: #ef5350;
+  --status-unavailable: #a3a3a3;
+  --status-tentative: #a3a3a3;
+  --status-complete: #f5f5f5;
+
+  --sync-synced: #a3a3a3;
+  --sync-pending: #e5a93a;
+  --sync-failed: #ef5350;
+
+  --shadow-button: 0 4px 10px rgb(0 0 0 / 0.5);
+  --shadow-card: 0 0 0 1px #2a2a2a;
+}

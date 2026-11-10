@@ -1,0 +1,13 @@
+node_modules
+dist
+dev-dist
+.wrangler
+.playwright-mcp
+.base-ast-cache
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.dev.vars
+supabase/.temp
+screenshots
