@@ -9,7 +9,45 @@ relatedTo: []
 
 Every function in the data layer (`src/data`), what it does today on mock data, and what it becomes when Supabase is connected. Screens only use the hooks in `src/data/hooks.ts`, so replacing the function bodies needs no UI changes. See [netsuite-mapping.md](netsuite-mapping.md) for the records behind each table.
 
-Project: **McWorkshop** (`xckqgweflvfstbvppmsy`). No tables or policies exist yet. One Edge Function is live: `customers-list` (see below).
+Project: **McWorkshop** (`xckqgweflvfstbvppmsy`). Live tables: the vehicle library (see below) and the role tables `profiles` and `user_roles` that were applied outside the repo on 10/11/2026. Everything else is still mock data. One Edge Function is live: `customers-list` (see below).
+
+## Vehicle library (live)
+
+Migration `20261112000000_vehicle_library.sql`. Tables: `vehicle_makes`, `vehicle_models`, the lookups `vehicle_classes` and `vehicle_fuel_types`, and `sync_runs`. View: `vehicle_library` (security invoker), the list the Admin, Vehicle library screen reads with `.range()` pagination. The prototype's `VehicleModel` maps to a `vehicle_library` row.
+
+**Who owns which column.** The sync overwrites only its own columns on `source = 'netsuite'` rows. It never touches the app owned ones.
+
+| Table | Sync owned | App owned |
+|---|---|---|
+| `vehicle_makes` | `name`, `abbreviation`, `is_active`, `netsuite_modified_at`, `last_synced_at` | none |
+| `vehicle_models` | `name`, `base_model`, `make_id`, `abbreviation`, `is_active`, `netsuite_modified_at`, `last_synced_at` | `family`, `series`, `year_from`, `year_to`, `vehicle_class`, `fuel_type`, `engine`, `notes` |
+
+**Functions (live).** Both use `withApiKey` and the service role, and the screen calls them through `src/data/live-library.ts`.
+- `vehicle-library-sync` (POST, `{ "dryRun": true }` to preview). Reads the two NetSuite record lists, then calls the database function `sync_vehicle_library` in one transaction. Records a `sync_runs` row. First live run on 12/11/2026: 62 makes and 587 models inserted, 4 models skipped, and a repeat run inserted nothing. The database function refuses an empty list so a bad fetch cannot deactivate the library, and only the service role may run it.
+- `vehicle-library-list` (POST). One page of `vehicle_library` with search, make, type, fuel, status and source filters, plus the filter lists and summary figures. Search words are cleaned to letters, digits, spaces and a few joiners before they reach the query. Page size is capped at 100.
+- `vehicle-library-enrich` (POST, `{ "dryRun": true }` to preview). Fills type, fuel and years from workshop history using four aggregate SuiteQL queries (counts by model, no customer data). Migration `20261112020000_vehicle_library_history.sql` adds `vehicle_count`, `evidence_vehicles` and `attributes_source`, and the database function `apply_vehicle_library_history`. Rules: the past job type ("4WD Vehicle Service" or "Passenger Car Service") is the strongest class signal and the (DIESEL) or (PETROL) in it votes for fuel. Clear body types (hatch, sedan, coupe, van, cab chassis, single cab) are secondary, and ambiguous bodies such as wagon and dual cab count against the share. Class needs 2 votes and 75 to 80 percent agreement, fuel needs 2 votes and 80 percent. Years are the lowest and highest seen, ignoring a lone outlier, and the end year stays open for models seen in 2022 or later. Anything that fails a rule stays empty. Rows with `attributes_source = 'manual'` are never overwritten, and `history` rows are refreshed on each run. The edit function must set `manual`.
+- Coverage on 12/11/2026: 20,544 customer vehicles, 20,056 linked to a model (98 percent), all of them matched to a synced model. Type was set on 255 of 557 active models, which covers 16,809 of 19,084 vehicles (88 percent). Fuel was set on 264 and years on 556. Fuel on the vehicle records is filled for only 19 percent of vehicles and body type for 37 percent, with typos such as DESIL and MANAUL.
+- Research layer. Migration `20261112030000_vehicle_library_research.sql` adds `attributes_source = 'research'`, the database function `apply_vehicle_library_research` (service role only) and `notes` on the view. On 12/11/2026 AI agents with web search researched every model and 298 were loaded, covering 18,940 of 20,056 vehicles. Precedence is manual, then research, then history. The history refresh no longer overwrites research rows. The raw answers and sources are in `discovery/research/`. Only high and medium confidence rows were loaded.
+- Migration `20261112010000_vehicle_library_sync.sql` adds the database function, `vehicle_make_summary` and `base_model` on the view.
+- The Admin, Vehicle library screen is read only for now. It has an Update from back office button (catalogue editors). Editing class, fuel, years and engine needs a write function, which is the next step. Service profiles still attach to the demo library until they move to Supabase too.
+
+**Rules the sync function follows:**
+- Upsert on `netsuite_id` (unique, partial). Trim every name first, because the tables reject untrimmed names.
+- Do not rely on `(make, name)` being unique. NetSuite holds duplicates such as two "RANGER RAPTOR" rows.
+- Skip models with no make and count them in `sync_runs.skipped`. There are 4 today.
+- Set `is_active = false` for NetSuite rows missing from a full fetch.
+- A model's `vehicle_class` is empty after the first sync. The view exposes that as `needs_review`.
+- Insert a `sync_runs` row at the start and close it at the end. Counts and error codes only.
+
+**Access.** Row level security is on everywhere. Staff read (any user holding a row in `user_roles`). No policy lets a signed in user write, so every change goes through an RPC or Edge Function that checks the role, as listed under the data functions. `sync_runs` has no policy, so only the service role reads or writes it. `anon` has no access. Checked on 12/11/2026: anon read and any signed in write are denied, a role holder reads, and a user with no role sees nothing.
+
+**Not yet in the schema.** Individual customer vehicles (`vehicles`). They hold customer data and need their own RLS. They will reference `vehicle_models` by id. NetSuite's vehicle fuel, body and transmission fields are free text with typos ("DESIL", "MANAUL"), so normalise them on import. Do not copy them across.
+
+**Open items on the existing role tables** (not changed by this work):
+- The `app_role` enum is admin, manager, mechanic and executive. The app uses Advisor, Workshop Controller, Mechanic, Manager and Administrator. The two sets need reconciling before real sign in.
+- `handle_new_user` gives every new sign up the `mechanic` role. If public sign up is on, anyone can register and gain that role, which also grants library read. Turn off public sign up or invite staff only.
+- `anon` and `authenticated` hold full table grants on `profiles` and `user_roles`. RLS limits them, but trim the grants when those tables are next changed.
+- The repo files `20261110114239_roles_and_profiles.sql` and `20261110114320_roles_and_profiles_security.sql` are rebuilt from the live definitions so the migration history matches. Their split between the two files is a guess.
 
 ## Edge Functions (NetSuite backed API endpoints)
 
@@ -63,7 +101,7 @@ Each business use case is its own Edge Function, a custom API endpoint that call
 
 ## Proposed tables
 
-`customers`, `vehicles`, `technicians`, `technician_unavailability`, `bays`, `service_templates`, `bookings`, `booking_technicians`, `job_cards`, `labour_lines`, `parts_lines`, `checklist_items`, `findings`, `finding_photos`, `quote_lines`, `time_entries`, `job_notes`, `invoices` (synced, read only), `activity_events` (append only), `outbox`, `staff_profiles` (role, technician link).
+`customers`, `vehicles`, `technicians`, `technician_unavailability`, `bays`, `service_templates`, `bookings`, `booking_technicians`, `job_cards`, `labour_lines`, `parts_lines`, `checklist_items`, `findings`, `finding_photos`, `quote_lines`, `time_entries`, `job_notes`, `invoices` (synced, read only), `activity_events` (append only), `outbox`, `staff_profiles` (role, title, active, technician link), `role_permissions` (role, action), `workshop_settings` (single row), `closed_days`, `vehicle_models` (the vehicle library), `service_profiles`.
 
 Each synced table carries `netsuite_id`, `sync_status`, `last_synced_at` and `division`.
 
@@ -84,7 +122,13 @@ Each synced table carries `netsuite_id`, `sync_status`, `last_synced_at` and `di
 | `getStaff` | Removed | Replaced by Supabase Auth sign in | |
 | `getTechnicians` | Table select | `technicians` with unavailability | All staff |
 | `getBays` | Table select | `bays` | All staff |
-| `getServiceTemplates` | Table select | `service_templates` where division is servicing | Price columns hidden from mechanics |
+| `getServiceTemplates` | Table select | `service_templates` where division is servicing. Now carries `interval_km`, `vehicle_class`, `fuel`, `notes` and `active` | Price columns hidden from mechanics |
+| `getRolePermissions` | Table select | `role_permissions` grouped by role | All staff read (the app needs it to hide screens). Admin write only |
+| `getWorkshopSettings` | Table select | `workshop_settings` plus `closed_days` | All staff read. Admin write only |
+| `getVehicleLibrary` | View select, paginated | `vehicle_library` (live). Filled by the NetSuite sync once built, with a manual add for gaps | Staff read. Writes by RPC for catalogue editors |
+| `getServiceProfiles` | Table select | `service_profiles` | Office roles read. Catalogue editors write. Price columns hidden from mechanics |
+| `getServicePlan` | RPC `service_plan(vehicle_id, template_id)` | Match the vehicle to a `vehicle_models` row, return the active profile for that model and template or fall back to the generic template. The matching in `src/lib/service-profiles.ts` is a prototype stand in: real vehicles will carry a `vehicle_model_id` | Office roles |
+| `getServiceActuals` | View `service_actuals` | Average closed time entry hours per template and per profile, finished jobs only | Office roles |
 | `searchEverything` | RPC `search_everything(q)` | Trigram search over rego, VIN, customer name, mobile, booking and job numbers | Office roles |
 | `getVehicles`, `getVehicle` | View `vehicle_details` | Vehicle, customer, last visit, next booking, current job | Office roles |
 | `getVehicleTimeline` | View `vehicle_timeline` | Jobs for a vehicle with findings, newest first | Office roles |
@@ -109,7 +153,7 @@ Each synced table carries `netsuite_id`, `sync_status`, `last_synced_at` and `di
 |---|---|---|---|
 | `createCustomer` | RPC | Insert customer | Create customer |
 | `createVehicle` | RPC | Insert vehicle, reject duplicate rego | Create vehicle record |
-| `createBooking` | RPC `create_booking` | Insert booking and job card from a template, check conflicts, role checked override | Create case and task |
+| `createBooking` | RPC `create_booking` | Insert booking and job card from a template (or the vehicle's service profile when one matches, using the settings labour rate), check conflicts, role checked override | Create case and task |
 | `rescheduleBooking` | RPC `reschedule_booking` | Move, resize, reassign or unassign, check conflicts | Update task dates and assignee |
 | `confirmBooking` | RPC | Tentative to confirmed | Update status |
 | `cancelBooking` | RPC | Cancel a booking that has not arrived | Cancel or close case |
@@ -126,6 +170,14 @@ Each synced table carries `netsuite_id`, `sync_status`, `last_synced_at` and `di
 | `sendQuoteForApproval` | RPC | Line to awaiting customer | Create or update estimate |
 | `approveQuote` | RPC `approve_quote` | Line to approved, add labour and parts lines, extend the booking | Update estimate, add task time |
 | `declineQuote` | RPC | Line to declined | Update estimate |
+| `saveStaffMember` | RPC `save_staff_member` (service role for the Auth user) | Create or update a person, their role, title and active flag, and their technician row. Refuses to demote or deactivate yourself or the last active administrator | None. App only |
+| `saveRolePermissions`, `resetRolePermissions` | RPC, admin only | Replace the actions for a role. Administrators are always full and `admin.users` and `integration.view` stay administrator only | None. App only |
+| `saveWorkshopSettings`, `applyHoursToTechnicians` | RPC, admin only | Default hours, break, daily target per technician, labour rate (integer cents ex GST). Validates that the target fits the working day | None. App only |
+| `addClosedDay`, `removeClosedDay` | RPC, admin only | Public holidays and shutdowns. Returns how many bookings already sit on the day | None. App only |
+| `saveBay`, `removeBay` | RPC, admin only | Create, rename, retype. Removal refused while upcoming bookings use the bay | None. App only |
+| `saveVehicleModel`, `removeVehicleModel` | RPC, catalogue editors | Library entry. Refuses duplicates and deletion while profiles use it | Reads sync in from NetSuite later. Manual rows stay local |
+| `saveServiceTemplate`, `removeServiceTemplate` | RPC, catalogue editors | Generic template. Removal refused once a booking or profile uses it (make it inactive) | None. App only |
+| `saveServiceProfile`, `removeServiceProfile` | RPC, catalogue editors | One profile per template and model. Hours, parts, optional checklist, notes | None. App only |
 | `retrySync` | Edge Function `retry-outbox` | Requeue one failed outbox row | Resend |
 | `setErrorSimulation`, `resetDemo` | Removed | Demo controls only | |
 
@@ -139,7 +191,7 @@ Each synced table carries `netsuite_id`, `sync_status`, `last_synced_at` and `di
 
 ## Auth
 
-Mock sign in (`src/auth/session.ts`) becomes Supabase Auth. `StaffUser` maps to `staff_profiles`. `can()` in `src/auth/permissions.ts` stays as a UI convenience only. The real checks are RLS and the RPCs.
+Mock sign in (`src/auth/session.ts`) becomes Supabase Auth. `StaffUser` maps to `staff_profiles`. `can()` in `src/auth/permissions.ts` stays as a UI convenience only. The permission matrix is data (`role_permissions`), so the RPCs must check it server side. Administrators always have every permission, and `admin.users` and `integration.view` are administrator only. The real checks are RLS and the RPCs.
 
 ## Storage
 

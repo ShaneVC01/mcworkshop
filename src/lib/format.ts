@@ -102,8 +102,15 @@ export function weekdayOf(day: string) {
   return n === 0 ? 7 : n
 }
 
+/** Days the workshop is closed on top of weekends. Set from Admin through the data layer. */
+let closedDays = new Set<string>()
+
+export function setClosedDays(days: string[]) {
+  closedDays = new Set(days)
+}
+
 export function isWorkingDay(day: string) {
-  return weekdayOf(day) <= 5
+  return weekdayOf(day) <= 5 && !closedDays.has(day)
 }
 
 /** Moves by working days, skipping weekends. */

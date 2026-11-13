@@ -11,3 +11,5 @@ dev-dist
 .dev.vars
 supabase/.temp
 screenshots
+# NetSuite discovery extracts (redacted, but still business data). Never commit.
+discovery/data

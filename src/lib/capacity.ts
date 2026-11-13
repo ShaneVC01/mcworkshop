@@ -58,7 +58,12 @@ export function technicianCapacity(tech: Technician, day: string, bookings: Book
   }
 }
 
-export function dayCapacity(day: string, technicians: Technician[], bookings: Booking[]): CapacitySummary {
+export function dayCapacity(
+  day: string,
+  technicians: Technician[],
+  bookings: Booking[],
+  dailyTargetHours = 0,
+): CapacitySummary {
   const byTechnician = technicians.filter((t) => t.active).map((t) => technicianCapacity(t, day, bookings))
   const sum = (pick: (c: DayCapacity) => number) => byTechnician.reduce((s, c) => s + pick(c), 0)
   const availableHours = sum((c) => c.availableHours)
@@ -72,6 +77,8 @@ export function dayCapacity(day: string, technicians: Technician[], bookings: Bo
     freeHours: availableHours - confirmedHours - tentativeHours,
     utilisation: availableHours ? confirmedHours / availableHours : 0,
     potentialUtilisation: availableHours ? (confirmedHours + tentativeHours) / availableHours : 0,
+    // Only technicians who are working that day count towards the target.
+    targetHours: byTechnician.filter((c) => c.availableHours > 0).length * dailyTargetHours,
     byTechnician,
   }
 }

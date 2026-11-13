@@ -1,0 +1,201 @@
+[
+  {
+    "id": "571cd0a0-71fb-451b-8e4c-36f94865802b",
+    "family": "Pulsar",
+    "series": null,
+    "year_from": 1980,
+    "year_to": 2017,
+    "in_production": false,
+    "vehicle_class": "passenger",
+    "fuel_type": "petrol",
+    "engine": null,
+    "confidence": "medium",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Nissan_Pulsar",
+      "https://goauto.com.au/amp/56698/why-nissan-dropped-pulsar-and-altima.html"
+    ],
+    "notes": "Nameplate spans several generations (N10 onward). Wikipedia says the N10 entered Australia in October 1980. GoAuto says the Pulsar hatch was dropped in 2016 and the Pulsar sedan (B17) in 2017. Series left null because the workshop vehicles may be from any generation. The hint of 1995 to 2015 covers only part of the range. Petrol only is based on the Australian engine text found, not a full engine list. Engines not verified."
+  },
+  {
+    "id": "8cd209bb-9c90-4d3d-839e-cedc4820f64e",
+    "family": "Elantra",
+    "series": null,
+    "year_from": null,
+    "year_to": 2020,
+    "in_production": false,
+    "vehicle_class": "passenger",
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "medium",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Hyundai_Elantra",
+      "https://cars4starters.com.au/name-change-for-unloved-elantra/"
+    ],
+    "notes": "Sold in Australia as the Lantra for the first two generations (to 2000), then as the Elantra. The Elantra name was dropped for the seventh generation (CN7), which was sold in Australia as the i30 Sedan from the 2021 model year, launching in the second half of 2020. Year_to 2020 is the last Elantra badged sale. First Australian year not confirmed, so year_from is blank. Fuel is mixed across generations (petrol, LPG hybrid, diesel), so left null. Engines not verified for Australia."
+  },
+  {
+    "id": "63412a4b-73cc-46d4-8d74-7a49b55618fb",
+    "family": "Sportage",
+    "series": null,
+    "year_from": 1997,
+    "year_to": null,
+    "in_production": true,
+    "vehicle_class": "passenger",
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "medium",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Kia_Sportage"
+    ],
+    "notes": "Wikipedia gives no Australian years. The 1997 Australian entry comes from a CarAdvice search summary; the article itself redirected to a page that could not be opened, so treat the start year as low confidence. First generation was body on frame with optional 4WD, and later generations are unibody crossovers, so class is passenger for the current nameplate. Wikipedia says the fifth generation (NQ5) is still sold, with a May 2025 facelift. Engines are mixed across generations, so fuel and engine are left blank."
+  },
+  {
+    "id": "018b0c3e-c7d5-49e8-a10d-1a8f01076ef7",
+    "family": "Cherokee",
+    "series": null,
+    "year_from": null,
+    "year_to": 2022,
+    "in_production": false,
+    "vehicle_class": null,
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "low",
+    "sources": [
+      "https://carexpert.com.au/car-news/jeep-ending-right-hand-drive-cherokee-production-australian-stock-almost-gone",
+      "https://en.wikipedia.org/wiki/Jeep_Cherokee_(KL)"
+    ],
+    "notes": "Right-hand-drive production for Australia was announced as ending in October 2022; the final delivery year is not confirmed. The start year (a claimed 28 years of unbroken sales) came only from a search summary and is left blank. Class is left null because the early XJ and KJ and KK models were 4x4 wagons while the KL is a crossover. Wikipedia KL article gives no Australian sales or engine data. Engines not verified."
+  },
+  {
+    "id": "09d0dcfa-e6b4-48a4-9776-f3f8629184ec",
+    "family": "HR-V",
+    "series": "RU",
+    "year_from": 2015,
+    "year_to": 2021,
+    "in_production": false,
+    "vehicle_class": "passenger",
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "low",
+    "sources": [
+      "https://www.goauto.com.au/news/honda/hr-v/2022-05-04/87755.html",
+      "https://en.wikipedia.org/wiki/Honda_HR-V"
+    ],
+    "notes": "Series limited to the RU (second generation) that Honda sold in Australia from 2015. GoAuto says the replacement launched in early May 2022, so the final RU sale year is inferred as 2021 and is not confirmed. The current model from 2022 is a separate series and may still be sold; in_production refers to the RU only. The earlier first-generation HR-V (GH) may have been sold in Australia around 1999 to 2001, but this is not verified, so it is excluded. Fuel is mixed (petrol and hybrid), so left null. Engines not verified for Australia."
+  },
+  {
+    "id": "dd3f79e8-72dd-4a5a-969d-e20ac3a71fe1",
+    "family": "T60",
+    "series": null,
+    "year_from": 2017,
+    "year_to": null,
+    "in_production": null,
+    "vehicle_class": "4wd",
+    "fuel_type": "diesel",
+    "engine": "2.8 L SC28R 150 Q5 turbo diesel (SDEC); 2.0 L SC20M diesel (Trailrider 2, from May 2020)",
+    "confidence": "medium",
+    "sources": [
+      "https://en.wikipedia.org/wiki/LDV_T60"
+    ],
+    "notes": "Launched in Australia on 25 September 2017. Wikipedia lists every Australian variant as 4WD, including cab chassis. Sales figures run to 2024, but the article does not say whether the T60 is still sold in late 2026, so in_production is null. Single source only."
+  },
+  {
+    "id": "0af561fd-187a-4ae4-a87a-0c69f99024d9",
+    "family": "Challenger",
+    "series": null,
+    "year_from": 1998,
+    "year_to": 2015,
+    "in_production": false,
+    "vehicle_class": "4wd",
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "medium",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Mitsubishi_Challenger"
+    ],
+    "notes": "Wikipedia says the Challenger name was used in Australia for the PA and PA II (from 1998) and the PB generations, and was dropped with the third generation in 2015. No exact final Australian sale year is given, so 2015 follows the name change. The workshop hint of diesel is not confirmed; Australian engines were not found in the source, so fuel and engine are left blank. The later Pajero Sport name is a separate model and is excluded."
+  },
+  {
+    "id": "bd6d5cf2-3931-45b3-90a0-ce92d466da81",
+    "family": "XV",
+    "series": null,
+    "year_from": 2012,
+    "year_to": 2023,
+    "in_production": false,
+    "vehicle_class": "passenger",
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "medium",
+    "sources": [
+      "https://marquenews.com.au/?p=20203",
+      "https://en.wikipedia.org/wiki/Subaru_XV"
+    ],
+    "notes": "The XV name was used in Australia from 2012. From 2023 the third generation was renamed Crosstrek in all markets (except North America, where it was already Crosstrek). The same model line is still sold in Australia as the Crosstrek, so year_to 2023 means the XV name ended, not that the model stopped. Standard AWD crossover, so passenger class. Engines (boxer petrol, with an e-Boxer mild hybrid on newer models) not verified for each year, so fuel and engine are left blank."
+  },
+  {
+    "id": "6420d473-8c85-439c-98a7-f4fc91d5ae18",
+    "family": "F-150",
+    "series": null,
+    "year_from": null,
+    "year_to": null,
+    "in_production": false,
+    "vehicle_class": "4wd",
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "medium",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Ford_F-Series"
+    ],
+    "notes": "No evidence that Ford Australia sold the F-150 new in Australia; the Wikipedia list of official markets does not include Australia, and the Raptor is not listed for Australia either. The workshop vehicles are probably private imports, so years are blank and in_production is false (not sold new). Class is 4wd because it is a body on frame 4x4 truck. Fuel and engine are US market only and not applicable here."
+  },
+  {
+    "id": "5d77376a-332e-4ee8-a37e-6449325383a1",
+    "family": "BT-50",
+    "series": "TF",
+    "year_from": 2020,
+    "year_to": null,
+    "in_production": true,
+    "vehicle_class": "4wd",
+    "fuel_type": "diesel",
+    "engine": "3.0 L turbo diesel; 1.9 L turbo diesel (added November 2021)",
+    "confidence": "medium",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Mazda_BT-50"
+    ],
+    "notes": "Series TF is the third generation, released in Australia in October 2020 with diesel only at launch. Wikipedia says the Boss and Thunder variants were introduced in March 2026, so it is still on sale. SP is treated as a trim or special edition of the BT-50 rather than a separate nameplate. Earlier generations (UN, UP, UR) were also sold in Australia from about 2006 onward, but exact years are not confirmed. Input active flag is false, which does not affect this data."
+  },
+  {
+    "id": "a4393579-737e-42df-95da-3eb46a630d99",
+    "family": "Dualis",
+    "series": "J10",
+    "year_from": 2007,
+    "year_to": 2014,
+    "in_production": false,
+    "vehicle_class": "passenger",
+    "fuel_type": null,
+    "engine": "2.0 L petrol; 1.6 L diesel (2013 and 2014 models, per CarsGuide)",
+    "confidence": "medium",
+    "sources": [
+      "https://carsguide.com.au/nissan/dualis",
+      "https://en.wikipedia.org/wiki/Nissan_Dualis"
+    ],
+    "notes": "Wikipedia says Australian sales began in December 2007; CarsGuide says it arrived locally in 2008. The Dualis was replaced by the Qashqai in Australia in 2014, so year_to 2014 is the replacement year and the final sale month is not confirmed. First two years were AWD only, which fits passenger class. Petrol is the main engine, but CarsGuide also lists a diesel, so fuel is left blank. The diesel detail comes from a single source."
+  },
+  {
+    "id": "d1e27b9c-32b0-419e-a1f0-6222647f8ac3",
+    "family": "LandCruiser",
+    "series": "105 Series",
+    "year_from": 1998,
+    "year_to": 2007,
+    "in_production": false,
+    "vehicle_class": "4wd",
+    "fuel_type": null,
+    "engine": "4.5 L 1FZ-FE petrol inline six; 4.2 L 1HZ naturally aspirated diesel",
+    "confidence": "medium",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Toyota_Land_Cruiser_(J100)",
+      "https://redriven.com/cheat-sheets/used-toyota-landcruiser-100-105-series-review/"
+    ],
+    "notes": "Wikipedia gives the J100 span as January 1998 to August 2007, covering both the 100 and 105 Series. The 105 is named as the 1FZ-FE petrol and 1HZ diesel variant. The 4.2 L turbo diesel (1HD-FTE) belonged to the 100 Series, so it is excluded. The 200 Series replaced the range in Australia around 2007. The 1998 start comes from the J100 span. Mixed petrol and diesel, so fuel is left null."
+  }
+]

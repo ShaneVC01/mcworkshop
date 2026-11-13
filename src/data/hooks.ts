@@ -4,8 +4,9 @@
  */
 import { useEffect } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
-import type { AvailabilityRequest, Id, Result } from '@/types'
+import type { AvailabilityRequest, Id, LibraryFilters, Result } from '@/types'
 import { subscribe } from './mock/store'
+import * as live from './live-library'
 import * as q from './queries'
 
 function useData<T>(key: unknown[], fn: () => Promise<Result<T>>, enabled = true): UseQueryResult<Result<T>> {
@@ -33,6 +34,27 @@ export const useStaff = () => useData(['staff'], q.getStaff)
 export const useTechnicians = () => useData(['technicians'], q.getTechnicians)
 export const useBays = () => useData(['bays'], q.getBays)
 export const useServiceTemplates = () => useData(['templates'], q.getServiceTemplates)
+export const useRolePermissions = () => useData(['role-permissions'], q.getRolePermissions)
+export const useWorkshopSettings = () => useData(['workshop-settings'], q.getWorkshopSettings)
+export const useVehicleLibrary = () => useData(['vehicle-library'], q.getVehicleLibrary)
+/** The synced vehicle library, filtered and paged in the database. */
+export const useLibraryPage = (filters: LibraryFilters) =>
+  useData(['library-page', filters], () => live.getLibraryPage(filters), live.edgeConfigured())
+export const useSyncLibrary = () => {
+  const client = useQueryClient()
+  const action = useAction(async (dryRun: boolean) => {
+    const result = await live.syncVehicleLibrary(dryRun)
+    // Types follow the models, so refresh them straight after the models.
+    const history = await live.enrichVehicleLibrary(dryRun)
+    if (!dryRun) await client.invalidateQueries({ queryKey: ['library-page'] })
+    return { ...result, history }
+  })
+  return action
+}
+export const useServiceProfiles = () => useData(['service-profiles'], q.getServiceProfiles)
+export const useServiceActuals = () => useData(['service-actuals'], q.getServiceActuals)
+export const useServicePlan = (vehicleId: Id | undefined, templateId: Id | undefined) =>
+  useData(['service-plan', vehicleId, templateId], () => q.getServicePlan(vehicleId, templateId!), Boolean(templateId))
 
 export const useSearch = (query: string) => useData(['search', query], () => q.searchEverything(query), query.trim().length >= 2)
 export const useVehicles = (query: string) => useData(['vehicles', query], () => q.getVehicles(query))

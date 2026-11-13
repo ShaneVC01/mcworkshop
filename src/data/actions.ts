@@ -3,18 +3,21 @@
  * Every action saves locally, writes an activity event and queues an outbox entry.
  * Nothing here sends anything to NetSuite. See docs/supabase-handover.md.
  */
+import { ADMIN_ONLY, defaultRolePermissions } from '@/auth/default-permissions'
 import { getSession } from '@/auth/session'
 import { findConflicts, freeBay } from '@/lib/capacity'
 import { addMinutes, dayKey, formatDayShort, formatTime, minutesBetween, minutesOfDay, normaliseRego } from '@/lib/format'
 import { canTransition, isFinished, JOB_STATUS_LABEL } from '@/lib/job-state'
+import { resolveServicePlan } from '@/lib/service-profiles'
 import type {
-  Booking, ChecklistItem, Customer, Finding, FindingSeverity, Id, JobCard, JobStatus, QuoteLine, RegoState, Result,
-  Vehicle,
+  Action, Bay, Booking, ChecklistItem, ChecklistTemplateItem, ClosedDay, Customer, Finding, FindingSeverity, Id, JobCard,
+  JobStatus, QuoteLine, RegoState, Result, Role, ServiceProfile, ServiceTemplate, Skill, StaffUser, TemplatePart,
+  Vehicle, VehicleModel, WorkshopSettings,
 } from '@/types'
-import { buildJobParts, LABOUR_RATE_CENTS, type Database } from './mock/seed'
-import { DataError, resetDemoData, retryOutboxEntry, setSimulateErrors, write, type WriteContext } from './mock/store'
-
-export { LABOUR_RATE_CENTS }
+import { buildJobParts, type Database } from './mock/seed'
+import {
+  DataError, resetDemoData, retryOutboxEntry, setSimulateErrors, write, writeConfig, type WriteContext,
+} from './mock/store'
 
 const pending = { status: 'pending' as const }
 
@@ -90,9 +93,12 @@ export interface CreateBookingInput {
 export const createBooking = (input: CreateBookingInput): Promise<Result<Booking>> =>
   write('booking.create', 'New booking', (b) => b.id, (ctx) => {
     const { db } = ctx
-    const template = db.templates.find((t) => t.id === input.serviceTemplateId)
+    const base = db.templates.find((t) => t.id === input.serviceTemplateId)
     const vehicle = db.vehicles.find((v) => v.id === input.vehicleId)
-    if (!template || !vehicle) throw new DataError('Choose a vehicle and a service first.')
+    if (!base || !vehicle) throw new DataError('Choose a vehicle and a service first.')
+    // The vehicle's own profile wins over the generic template when there is one.
+    const plan = resolveServicePlan(base, vehicle, db.library, db.profiles, db.settings.labourRateCents)
+    const template = plan.template
     const endAt = addMinutes(input.startAt, template.labourHours * 60)
     const technicianIds = input.technicianId ? [input.technicianId] : []
     const span: [number, number] = [minutesOfDay(input.startAt), minutesOfDay(endAt)]
@@ -104,19 +110,19 @@ export const createBooking = (input: CreateBookingInput): Promise<Result<Booking
       id: `j${n}`, number: `J-${n}`, division: template.division, bookingId: `b${n}`,
       vehicleId: vehicle.id, customerId: vehicle.customerId, status: input.tentative ? 'BOOKED' : 'CONFIRMED',
       customerConcern: input.customerConcern.trim() || `${template.name} as booked.`,
-      ...buildJobParts(template, ctx.id), findings: [], quoteLines: [], timeEntries: [], notes: [],
+      ...buildJobParts(template, ctx.id, db.settings.labourRateCents), findings: [], quoteLines: [], timeEntries: [], notes: [],
       promisedAt: addMinutes(endAt, 60), sync: pending,
     }
     const booking: Booking = {
       id: `b${n}`, number: `B-${n}`, division: template.division, jobId: job.id, vehicleId: vehicle.id,
       customerId: vehicle.customerId, technicianIds, bayId, startAt: input.startAt, endAt,
-      estimatedLabourHours: template.labourHours, serviceTemplateId: template.id, serviceName: template.name,
+      estimatedLabourHours: template.labourHours, serviceTemplateId: base.id, serviceName: template.name,
       tentative: Boolean(input.tentative), readiness: template.parts.length ? 'ready' : 'unknown', sync: pending,
     }
     db.jobs.push(job)
     db.bookings.push(booking)
     ctx.log(job.id, 'booking.created', `Booked ${template.name} for ${formatDayShort(dayKey(booking.startAt))} at ${formatTime(booking.startAt)}`, {
-      registration: vehicle.registration,
+      registration: vehicle.registration, source: plan.source,
     })
     return booking
   })
@@ -381,7 +387,7 @@ export const addFindingToQuote = (
     if (job.quoteLines.some((l) => l.findingId === findingId)) throw new DataError('That finding is already on the quote.')
     const line: QuoteLine = {
       id: ctx.id(), findingId, description: input.description.trim(), labourHours: input.labourHours,
-      labourCents: Math.round(input.labourHours * LABOUR_RATE_CENTS), partsCents: input.partsCents, status: 'draft',
+      labourCents: Math.round(input.labourHours * ctx.db.settings.labourRateCents), partsCents: input.partsCents, status: 'draft',
     }
     job.quoteLines.push(line)
     setFindingApproval(job, line)
@@ -409,7 +415,7 @@ export const approveQuote = (jobId: Id, lineId: Id): Promise<Result<QuoteLine>> 
     line.decidedAt = ctx.now
     setFindingApproval(job, line)
     job.labour.push({
-      id: ctx.id(), description: line.description, hours: line.labourHours, rateCents: LABOUR_RATE_CENTS,
+      id: ctx.id(), description: line.description, hours: line.labourHours, rateCents: ctx.db.settings.labourRateCents,
       source: 'additional', findingId: line.findingId, done: false,
     })
     if (line.partsCents) {
@@ -449,3 +455,243 @@ export async function setErrorSimulation(on: boolean) {
 export async function resetDemo() {
   resetDemoData()
 }
+
+// ---- Admin: staff and permissions -------------------------------------------------------------------
+// App owned configuration. It is never sent to the back office system, so these skip the outbox.
+
+const tidy = (text: string) => text.trim().replace(/\s+/g, ' ')
+const isTime = (t: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t)
+const minutesOf = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3))
+const isDay = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T12:00:00Z`))
+
+function checkHours(start: string, end: string, breakMinutes: number) {
+  if (!isTime(start) || !isTime(end)) throw new DataError('Enter hours like 07:00.')
+  if (minutesOf(end) <= minutesOf(start)) throw new DataError('Finish time must be after the start time.')
+  if (!Number.isFinite(breakMinutes) || breakMinutes < 0 || breakMinutes > 180) throw new DataError('Break must be between 0 and 180 minutes.')
+  if (breakMinutes >= minutesOf(end) - minutesOf(start)) throw new DataError('The break is longer than the shift.')
+}
+
+export interface StaffInput {
+  id?: Id
+  name: string
+  role: Role
+  title?: string
+  active: boolean
+  /** Set when this person is booked onto jobs. Null means they are not a technician. */
+  technician: { skills: Skill[]; shiftStart: string; shiftEnd: string; breakMinutes: number } | null
+}
+
+export const saveStaffMember = (input: StaffInput): Promise<Result<StaffUser>> =>
+  writeConfig(({ db, id }) => {
+    const name = tidy(input.name)
+    if (!name) throw new DataError('Enter a name.')
+    const existing = input.id ? db.staff.find((u) => u.id === input.id) : undefined
+    if (input.id && !existing) throw new DataError('That person could not be found.')
+    if (db.staff.some((u) => u.id !== input.id && u.name.toLowerCase() === name.toLowerCase())) {
+      throw new DataError(`${name} is already on the list.`)
+    }
+    if (input.role === 'mechanic' && !input.technician) throw new DataError('A technician needs shift hours.')
+    if (input.technician) checkHours(input.technician.shiftStart, input.technician.shiftEnd, input.technician.breakMinutes)
+
+    const me = getSession()
+    if (existing && me?.id === existing.id && (!input.active || input.role !== existing.role)) {
+      throw new DataError('You cannot change your own role or deactivate yourself.')
+    }
+    const otherAdmins = db.staff.filter((u) => u.id !== existing?.id && u.role === 'admin' && u.active)
+    if ((input.role !== 'admin' || !input.active) && !otherAdmins.length) throw new DataError('Keep at least one active administrator.')
+
+    const user: StaffUser = existing ?? { id: id('u'), name, role: input.role, active: input.active }
+    if (!existing) db.staff.push(user)
+    Object.assign(user, { name, role: input.role, title: tidy(input.title ?? '') || undefined, active: input.active })
+
+    let tech = user.technicianId ? db.technicians.find((t) => t.id === user.technicianId) : undefined
+    if (input.technician) {
+      if (!tech) {
+        tech = { id: id('t'), name, skills: [], shiftStart: '07:00', shiftEnd: '15:30', breakMinutes: 30, active: true, unavailable: [] }
+        db.technicians.push(tech)
+        user.technicianId = tech.id
+      }
+      Object.assign(tech, { name, ...input.technician, active: input.active })
+    } else if (tech) {
+      // Kept for history, but no longer offered for work.
+      tech.active = false
+      tech.name = name
+    }
+    return user
+  })
+
+export const saveRolePermissions = (role: Role, actions: Action[]): Promise<Result<Action[]>> =>
+  writeConfig(({ db }) => {
+    if (role === 'admin') throw new DataError('Administrators always have every permission.')
+    const allowed = [...new Set(actions)].filter((a) => !ADMIN_ONLY.includes(a))
+    db.rolePermissions[role] = allowed
+    return allowed
+  })
+
+export const resetRolePermissions = (role: Role): Promise<Result<Action[]>> =>
+  writeConfig(({ db }) => {
+    db.rolePermissions[role] = defaultRolePermissions()[role]
+    return db.rolePermissions[role]
+  })
+
+// ---- Admin: workshop hours, bays and closed days -----------------------------------------------------
+
+export const saveWorkshopSettings = (
+  patch: Partial<Pick<WorkshopSettings, 'openTime' | 'closeTime' | 'breakMinutes' | 'dailyTargetHours' | 'labourRateCents'>>,
+): Promise<Result<WorkshopSettings>> =>
+  writeConfig(({ db }) => {
+    const next = { ...db.settings, ...patch }
+    checkHours(next.openTime, next.closeTime, next.breakMinutes)
+    const shiftHours = (minutesOf(next.closeTime) - minutesOf(next.openTime) - next.breakMinutes) / 60
+    if (!(next.dailyTargetHours >= 0) || next.dailyTargetHours > shiftHours) {
+      throw new DataError(`The daily target cannot be more than the ${shiftHours.toFixed(1)} working hours in a day.`)
+    }
+    if (!Number.isInteger(next.labourRateCents) || next.labourRateCents <= 0) throw new DataError('Enter a labour rate above zero.')
+    db.settings = next
+    return next
+  })
+
+/** Copies the default hours onto every active technician. Leave and training are untouched. */
+export const applyHoursToTechnicians = (): Promise<Result<number>> =>
+  writeConfig(({ db }) => {
+    const { openTime, closeTime, breakMinutes } = db.settings
+    const active = db.technicians.filter((t) => t.active)
+    for (const t of active) Object.assign(t, { shiftStart: openTime, shiftEnd: closeTime, breakMinutes })
+    return active.length
+  })
+
+export const addClosedDay = (day: string, reason: string): Promise<Result<{ closed: ClosedDay; bookingsOnDay: number }>> =>
+  writeConfig(({ db }) => {
+    if (!isDay(day)) throw new DataError('Choose a date.')
+    if (db.settings.closedDays.some((d) => d.day === day)) throw new DataError('That day is already closed.')
+    const closed: ClosedDay = { day, reason: tidy(reason) || 'Closed' }
+    db.settings.closedDays = [...db.settings.closedDays, closed].sort((a, b) => a.day.localeCompare(b.day))
+    return { closed, bookingsOnDay: db.bookings.filter((b) => b.startAt.slice(0, 10) === day).length }
+  })
+
+export const removeClosedDay = (day: string): Promise<Result<string>> =>
+  writeConfig(({ db }) => {
+    db.settings.closedDays = db.settings.closedDays.filter((d) => d.day !== day)
+    return day
+  })
+
+export const saveBay = (input: { id?: Id; name: string; type: Bay['type'] }): Promise<Result<Bay>> =>
+  writeConfig(({ db, id }) => {
+    const name = tidy(input.name)
+    if (!name) throw new DataError('Enter a bay name.')
+    if (db.bays.some((b) => b.id !== input.id && b.name.toLowerCase() === name.toLowerCase())) throw new DataError(`${name} already exists.`)
+    const existing = input.id ? db.bays.find((b) => b.id === input.id) : undefined
+    if (input.id && !existing) throw new DataError('That bay could not be found.')
+    const bay: Bay = existing ?? { id: id('bay'), name, type: input.type }
+    Object.assign(bay, { name, type: input.type })
+    if (!existing) db.bays.push(bay)
+    return bay
+  })
+
+export const removeBay = (bayId: Id): Promise<Result<Id>> =>
+  writeConfig(({ db }) => {
+    const now = new Date().toISOString()
+    const upcoming = db.bookings.filter((b) => b.bayId === bayId && b.endAt > now)
+    if (upcoming.length) throw new DataError(`This bay has ${upcoming.length} booking${upcoming.length === 1 ? '' : 's'} coming up. Move them first.`)
+    db.bays = db.bays.filter((b) => b.id !== bayId)
+    return bayId
+  })
+
+// ---- Admin: vehicle library and service profiles -----------------------------------------------------
+
+export const saveVehicleModel = (input: Omit<VehicleModel, 'id'> & { id?: Id }): Promise<Result<VehicleModel>> =>
+  writeConfig(({ db, id }) => {
+    const make = tidy(input.make)
+    const model = tidy(input.model)
+    const series = tidy(input.series ?? '') || undefined
+    if (!make || !model) throw new DataError('Enter a make and a model.')
+    if (!(input.yearFrom >= 1950 && input.yearFrom <= 2100)) throw new DataError('Enter the first model year, for example 2015.')
+    if (input.yearTo !== undefined && input.yearTo < input.yearFrom) throw new DataError('The last year cannot be before the first.')
+    const clash = db.library.find(
+      (m) => m.id !== input.id && m.make.toLowerCase() === make.toLowerCase() && m.model.toLowerCase() === model.toLowerCase() &&
+        (m.series ?? '').toLowerCase() === (series ?? '').toLowerCase() && m.yearFrom === input.yearFrom,
+    )
+    if (clash) throw new DataError('That make, model, series and year is already in the library.')
+    const existing = input.id ? db.library.find((m) => m.id === input.id) : undefined
+    if (input.id && !existing) throw new DataError('That vehicle could not be found in the library.')
+    const entry: VehicleModel = existing ?? { ...input, id: id('m'), make, model, series }
+    Object.assign(entry, { ...input, id: entry.id, make, model, series, engine: tidy(input.engine ?? '') || undefined })
+    if (!existing) db.library.push(entry)
+    return entry
+  })
+
+export const removeVehicleModel = (modelId: Id): Promise<Result<Id>> =>
+  writeConfig(({ db }) => {
+    const used = db.profiles.filter((p) => p.modelId === modelId).length
+    if (used) throw new DataError(`${used} service profile${used === 1 ? ' uses' : 's use'} this vehicle. Make it inactive instead.`)
+    db.library = db.library.filter((m) => m.id !== modelId)
+    return modelId
+  })
+
+function checkParts(parts: TemplatePart[]) {
+  for (const p of parts) {
+    if (!tidy(p.name)) throw new DataError('Every part needs a name.')
+    if (!(p.qty > 0)) throw new DataError(`Enter a quantity for ${p.name}.`)
+    if (!Number.isInteger(p.unitCents) || p.unitCents < 0) throw new DataError(`Enter a price for ${p.name}.`)
+  }
+}
+
+function checkChecklist(items: ChecklistTemplateItem[]) {
+  if (items.some((c) => !tidy(c.label))) throw new DataError('Every checklist item needs a label.')
+}
+
+const cleanParts = (parts: TemplatePart[]) => parts.map((p) => ({ ...p, name: tidy(p.name) }))
+const cleanChecklist = (items: ChecklistTemplateItem[]) => items.map((c) => ({ ...c, label: tidy(c.label) }))
+
+export const saveServiceTemplate = (input: Omit<ServiceTemplate, 'id'> & { id?: Id }): Promise<Result<ServiceTemplate>> =>
+  writeConfig(({ db, id }) => {
+    const name = tidy(input.name)
+    if (!name) throw new DataError('Enter a service name.')
+    if (!(input.labourHours > 0 && input.labourHours <= 40)) throw new DataError('Enter labour hours between 0 and 40.')
+    if (input.intervalKm !== undefined && !(Number.isInteger(input.intervalKm) && input.intervalKm > 0)) throw new DataError('Enter the interval in whole kilometres.')
+    if (db.templates.some((t) => t.id !== input.id && t.name.toLowerCase() === name.toLowerCase())) throw new DataError(`${name} already exists.`)
+    checkParts(input.parts)
+    checkChecklist(input.checklist)
+    const existing = input.id ? db.templates.find((t) => t.id === input.id) : undefined
+    if (input.id && !existing) throw new DataError('That service could not be found.')
+    const template: ServiceTemplate = existing ?? { ...input, id: id('svc'), name }
+    Object.assign(template, { ...input, id: template.id, name, parts: cleanParts(input.parts), checklist: cleanChecklist(input.checklist) })
+    if (!existing) db.templates.push(template)
+    return template
+  })
+
+export const removeServiceTemplate = (templateId: Id): Promise<Result<Id>> =>
+  writeConfig(({ db }) => {
+    const profiles = db.profiles.filter((p) => p.templateId === templateId).length
+    const bookings = db.bookings.filter((b) => b.serviceTemplateId === templateId).length
+    if (profiles || bookings) throw new DataError('This service is already in use. Make it inactive instead.')
+    db.templates = db.templates.filter((t) => t.id !== templateId)
+    return templateId
+  })
+
+export const saveServiceProfile = (input: Omit<ServiceProfile, 'id'> & { id?: Id }): Promise<Result<ServiceProfile>> =>
+  writeConfig(({ db, id }) => {
+    if (!db.templates.some((t) => t.id === input.templateId)) throw new DataError('Choose the service this profile is for.')
+    if (!db.library.some((m) => m.id === input.modelId)) throw new DataError('Choose the vehicle this profile is for.')
+    if (!(input.labourHours > 0 && input.labourHours <= 40)) throw new DataError('Enter labour hours between 0 and 40.')
+    if (db.profiles.some((p) => p.id !== input.id && p.templateId === input.templateId && p.modelId === input.modelId)) {
+      throw new DataError('That vehicle already has a profile for this service. Edit that one instead.')
+    }
+    checkParts(input.parts)
+    if (input.checklist) checkChecklist(input.checklist)
+    const existing = input.id ? db.profiles.find((p) => p.id === input.id) : undefined
+    if (input.id && !existing) throw new DataError('That profile could not be found.')
+    const profile: ServiceProfile = existing ?? { ...input, id: id('p') }
+    Object.assign(profile, {
+      ...input, id: profile.id, parts: cleanParts(input.parts), checklist: input.checklist ? cleanChecklist(input.checklist) : undefined,
+      notes: tidy(input.notes ?? '') || undefined,
+    })
+    if (!existing) db.profiles.push(profile)
+    return profile
+  })
+
+export const removeServiceProfile = (profileId: Id): Promise<Result<Id>> =>
+  writeConfig(({ db }) => {
+    db.profiles = db.profiles.filter((p) => p.id !== profileId)
+    return profileId
+  })

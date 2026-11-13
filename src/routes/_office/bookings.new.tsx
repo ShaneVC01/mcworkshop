@@ -4,12 +4,13 @@ import { Check, Search, UserPlus } from 'lucide-react'
 import { useCan } from '@/auth/permissions'
 import { Card } from '@/components/domain/job-bits'
 import { RegoPlate } from '@/components/domain/rego-plate'
+import { describeModel } from '@/lib/service-profiles'
 import { PageHeader } from '@/components/shell/app-shell'
 import { ActionError, DataView, Skeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Field, fieldClass } from '@/components/ui/sheet'
-import { createBooking, createCustomer, createVehicle, LABOUR_RATE_CENTS } from '@/data/actions'
-import { useAction, useAvailability, useSearch, useServiceTemplates, useTechnicians, useVehicle } from '@/data/hooks'
+import { createBooking, createCustomer, createVehicle } from '@/data/actions'
+import { useAction, useAvailability, useSearch, useServicePlan, useServiceTemplates, useTechnicians, useVehicle } from '@/data/hooks'
 import {
   addMinutes, at, dayKey, formatDate, formatDayRelative, formatHours, formatKm, formatMoney, formatTime, gstOf,
   normaliseRego, workingToday,
@@ -51,7 +52,11 @@ function NewBookingPage() {
 
   const templates = useServiceTemplates()
   const technicians = useTechnicians()
-  const template = templates.data?.data.find((t) => t.id === templateId)
+  const chosenTemplate = templates.data?.data.find((t) => t.id === templateId)
+  // The vehicle's own profile wins over the generic template when there is one.
+  const plan = useServicePlan(vehicleId || undefined, templateId || undefined)
+  const template = plan.data?.data.template ?? chosenTemplate
+  const labourRate = plan.data?.data.labourRateCents ?? 0
   const fromDay = search.day ?? workingToday()
   const request = useMemo(
     () => (template ? { labourHours: template.labourHours, skill: template.skill, bayType: template.bayType, fromDay } : null),
@@ -86,7 +91,7 @@ function NewBookingPage() {
       .catch(() => undefined)
   }
 
-  const labourCents = template ? Math.round(template.labourHours * LABOUR_RATE_CENTS) : 0
+  const labourCents = template ? Math.round(template.labourHours * labourRate) : 0
   const partsCents = template ? template.parts.reduce((s, p) => s + p.qty * p.unitCents, 0) : 0
   const subtotal = labourCents + partsCents
 
@@ -103,7 +108,7 @@ function NewBookingPage() {
             <DataView query={templates} loading={<Skeleton className="h-40" />}>
               {(list) => (
                 <div className="grid gap-2 @lg:grid-cols-2 @3xl:grid-cols-3">
-                  {list.map((t) => (
+                  {list.filter((t) => t.active !== false).map((t) => (
                     <TemplateButton key={t.id} template={t} selected={t.id === templateId} onSelect={() => { setTemplateId(t.id); setChosen('') }} />
                   ))}
                 </div>
@@ -168,6 +173,13 @@ function NewBookingPage() {
             <h2 className="mb-3 text-xl">Estimate</h2>
             {template ? (
               <>
+                {plan.data && vehicleId && (
+                  <p className="mb-3 rounded-lg bg-secondary px-3 py-2 text-sm">
+                    {plan.data.data.source === 'profile' && plan.data.data.model
+                      ? `Times and parts from the ${describeModel(plan.data.data.model)} profile.`
+                      : 'Generic estimate. This vehicle has no profile for this service yet.'}
+                  </p>
+                )}
                 <dl className="tabular space-y-1.5">
                   <Row label={`Labour, ${formatHours(template.labourHours)}`} value={formatMoney(labourCents)} />
                   <Row label="Parts" value={formatMoney(partsCents)} />

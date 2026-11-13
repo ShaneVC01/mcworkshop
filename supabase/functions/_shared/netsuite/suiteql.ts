@@ -40,3 +40,14 @@ export async function runSuiteQL<T>(
     hasMore: result.hasMore,
   }
 }
+
+/** Reads every page of a query (1000 rows at a time). A hard cap stops a runaway loop. */
+export async function runSuiteQLAll<T>(ctx: RequestContext, query: string, maxRows = 50_000): Promise<T[]> {
+  const rows: T[] = []
+  for (let offset = 0; offset < maxRows; offset += 1000) {
+    const page = await runSuiteQL<T>(ctx, query, { limit: 1000, offset })
+    rows.push(...page.items)
+    if (!page.hasMore) return rows
+  }
+  throw new Error('The result is larger than the allowed maximum.')
+}

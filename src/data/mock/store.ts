@@ -4,7 +4,7 @@
  * with Supabase queries and keep the same signatures.
  */
 import { getSession } from '@/auth/session'
-import { nowIso } from '@/lib/format'
+import { nowIso, setClosedDays } from '@/lib/format'
 import type { ActivityType, Id, Result, SyncLogEntry, SyncState } from '@/types'
 import { createSeed, DB_VERSION, type Database } from './seed'
 
@@ -29,17 +29,23 @@ let db: Database | undefined
 const listeners = new Set<() => void>()
 const channel = typeof BroadcastChannel === 'undefined' ? undefined : new BroadcastChannel('mcw')
 
+/** Settings that plain functions in src/lib read, such as closed days. Runs on every load and commit. */
+function applyRuntime(database: Database) {
+  setClosedDays(database.settings.closedDays.map((d) => d.day))
+  return database
+}
+
 function load(): Database {
   try {
     const raw = localStorage.getItem(DB_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Database
-      if (parsed.version === DB_VERSION) return parsed
+      if (parsed.version === DB_VERSION) return applyRuntime(parsed)
     }
   } catch {
     // fall through to a fresh seed
   }
-  return createSeed()
+  return applyRuntime(createSeed())
 }
 
 function save() {
@@ -65,6 +71,7 @@ function notify() {
 }
 
 function commit() {
+  applyRuntime(getDb())
   save()
   notify()
   channel?.postMessage('changed')
@@ -86,6 +93,24 @@ export function subscribe(listener: () => void) {
 export function resetDemoData() {
   db = createSeed()
   commit()
+}
+
+export interface ConfigContext {
+  db: Database
+  id: (prefix: string) => Id
+}
+
+/**
+ * Write app owned configuration: staff, permissions, hours, the vehicle library and service profiles.
+ * These live in Supabase later and are never sent to the back office system, so there is no outbox entry
+ * and the result is always synced.
+ */
+export async function writeConfig<T>(apply: (ctx: ConfigContext) => T): Promise<Result<T>> {
+  await latency()
+  const database = getDb()
+  const result = apply({ db: database, id: (prefix) => `${prefix}${++database.counters.id}` })
+  commit()
+  return { data: structuredClone(result), sync: SYNCED }
 }
 
 // ---- Settings -----------------------------------------------------------------

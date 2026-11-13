@@ -1,0 +1,201 @@
+[
+  {
+    "id": "5bc54fd3-498d-40eb-ae06-4fcf8589567f",
+    "family": "Superb",
+    "series": null,
+    "year_from": 2009,
+    "year_to": null,
+    "in_production": true,
+    "vehicle_class": "passenger",
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "medium",
+    "sources": [
+      "https://www.carsguide.com.au/skoda/superb",
+      "https://en.wikipedia.org/wiki/Skoda_Superb"
+    ],
+    "notes": "Carsguide says the Superb has been sold since its 2009 arrival and shows 2026 and 2027 pricing. Wikipedia lists chassis codes 3T (B6), 3V (B8) and 3Y (B9), so the history range 2010 to 2019 spans more than one generation and series is left null. Engines not verified for Australia."
+  },
+  {
+    "id": "201ca4ea-eb4a-4091-805a-5c0424b13fa8",
+    "family": "Munaro",
+    "series": null,
+    "year_from": null,
+    "year_to": null,
+    "in_production": null,
+    "vehicle_class": null,
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "low",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Nissan_Munaro"
+    ],
+    "notes": "The Wikipedia page returned HTTP 404 and a search only returned Murano results. Nothing could be verified, so all fields are blank."
+  },
+  {
+    "id": "6ecc7a1a-6478-4a72-8eed-192958437688",
+    "family": "C-Class",
+    "series": "W203 / W204",
+    "year_from": null,
+    "year_to": null,
+    "in_production": null,
+    "vehicle_class": "passenger",
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "low",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Mercedes-Benz_C-Class",
+      "https://www.carsguide.com.au/mercedes-benz/c-class"
+    ],
+    "notes": "Trim C 180 treated as the C-Class nameplate. Wikipedia gives W203 as 1999 to 2010 and W204 as 2006 to 2015 (global), with no Australian sales years or C180 engine. Carsguide gave no usable dates. Current status of the nameplate not verified."
+  },
+  {
+    "id": "eee572bd-6e0f-4e61-a701-8c84160beb12",
+    "family": "Bravo",
+    "series": null,
+    "year_from": 1985,
+    "year_to": 2006,
+    "in_production": false,
+    "vehicle_class": "4wd",
+    "fuel_type": null,
+    "engine": "2.6 L G54B and G6 petrol (B2600 and B2600i); 2.2 L R2 and 2.5 L WL-T turbo diesel",
+    "confidence": "medium",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Mazda_Bravo"
+    ],
+    "notes": "Bravo was the Australian name for the Mazda B-Series, covering the UF (from 1985) and UN generations. Wikipedia says the B-Series was replaced by the BT-50 in 2006. It was sold in 2WD and 4WD body on frame form. Its UF end date conflicts (1998 and June 1999). Trim B2600 treated as the Bravo nameplate. Only one source, so medium confidence."
+  },
+  {
+    "id": "343ad22b-b973-4afc-b8f7-830b47537d77",
+    "family": "Freelander",
+    "series": "L359",
+    "year_from": null,
+    "year_to": null,
+    "in_production": false,
+    "vehicle_class": "passenger",
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "low",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Land_Rover_Freelander",
+      "https://www.carsguide.com.au/land-rover/freelander"
+    ],
+    "notes": "Wikipedia gives L359 (second generation) as built December 2006 to October 2014, so it is no longer sold new. It is a unibody compact crossover, so classed as passenger despite AWD. Australian sales years and engines not verified. Wikipedia names TD4 diesel and KV6 petrol for the first generation shipments only."
+  },
+  {
+    "id": "c0346061-f7c9-43d5-af46-4f444d2f52bb",
+    "family": "Compass",
+    "series": null,
+    "year_from": null,
+    "year_to": null,
+    "in_production": true,
+    "vehicle_class": "passenger",
+    "fuel_type": null,
+    "engine": "2.4 L petrol; 2.0 L diesel (Trailhawk, 2022 to 2024); 1.3 L 4xe plug in hybrid; 1.5 L hybrid",
+    "confidence": "medium",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Jeep_Compass",
+      "https://www.carsguide.com.au/jeep/compass"
+    ],
+    "notes": "Wikipedia lists MK49 (2006 to 2016), MP (2016 to 2026) and a 2025 third generation, globally. Neither page states Australian sales years, so year_from is blank. Carsguide shows 2026 and 2027 pricing, which supports still on sale. Engines are from carsguide pricing and fuel tables. Crossover, so passenger despite Trailhawk 4x4 variant."
+  },
+  {
+    "id": "9a9ee4eb-737e-47a3-bb3f-57fde205c9fa",
+    "family": "NPR",
+    "series": "Sixth generation N-Series",
+    "year_from": null,
+    "year_to": null,
+    "in_production": null,
+    "vehicle_class": "light-commercial",
+    "fuel_type": "diesel",
+    "engine": "3.0 L 4JJ1 turbo diesel (NJR and NPR models)",
+    "confidence": "low",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Isuzu_N-Series"
+    ],
+    "notes": "The Wikipedia page is the global Elf and N-Series article. It gives the sixth generation as introduced December 2006 (High Cab and Wide Cab) and February 2007 (Regular Cab), but no Australian dates. Only diesel engines are listed. Current Australian status not verified. Light truck classification is from the model class, not a source quote."
+  },
+  {
+    "id": "1e40779b-1d21-4367-9907-08f72eb32612",
+    "family": "Clubsport",
+    "series": null,
+    "year_from": null,
+    "year_to": null,
+    "in_production": false,
+    "vehicle_class": "passenger",
+    "fuel_type": "petrol",
+    "engine": "6.2 L V8 petrol (supercharged 6.2 L on the final R8 LSA)",
+    "confidence": "low",
+    "sources": [
+      "https://www.carsguide.com.au/hsv/clubsport"
+    ],
+    "notes": "HSV Clubsport is a Commodore-based model, sold as sedan and wagon (R8 Tourer). Carsguide lists model years 1990 to 2017 and says the final R8 LSA ended the line as Holden wound down local manufacturing. Years for the 2007 to 2014 history range were not verified, and VE and VF split is not confirmed. Holden no longer sells new cars."
+  },
+  {
+    "id": "a1e3f3a3-f82f-44cb-8773-b2c51e270195",
+    "family": "300 Series",
+    "series": null,
+    "year_from": null,
+    "year_to": null,
+    "in_production": true,
+    "vehicle_class": "light-commercial",
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "medium",
+    "sources": [
+      "https://www.carsguide.com.au/hino/300"
+    ],
+    "notes": "Carsguide calls the Hino 300 a core model in the Australian range, with 2026 and 2027 pricing, single cab and dual cab. Diesel is listed, but engine sizes conflict (4.0 L and 5.1 L). A hybrid variant existed in earlier years, so fuel is left null. Start year not verified on an opened page (search summaries suggest a 2007 changeover from Dutro)."
+  },
+  {
+    "id": "aeef9bd5-cfc3-44ae-b4a2-f6f6a3fdce5b",
+    "family": "C4",
+    "series": null,
+    "year_from": null,
+    "year_to": null,
+    "in_production": null,
+    "vehicle_class": "passenger",
+    "fuel_type": null,
+    "engine": null,
+    "confidence": "low",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Citroën_C4",
+      "https://www.carsguide.com.au/citroen/c4"
+    ],
+    "notes": "Wikipedia gives first generation (B5) as 2004 to 2010 and second generation (B7) as 2010 to 2018, globally, with no Australian dates. Carsguide shows a current line from $33,220 and a 2021 to 2024 SUV, so the nameplate may still be sold, but the current status is not confirmed. Engines not verified."
+  },
+  {
+    "id": "7d323941-f227-4f10-b536-4b99bf571f8b",
+    "family": "V40",
+    "series": "Second generation",
+    "year_from": null,
+    "year_to": null,
+    "in_production": false,
+    "vehicle_class": "passenger",
+    "fuel_type": null,
+    "engine": "1.5 L T3, 2.0 L T4 and 2.5 L petrol; 1.6 L and 2.0 L diesel (D2 and D4)",
+    "confidence": "medium",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Volvo_V40",
+      "https://www.carsguide.com.au/volvo/v40"
+    ],
+    "notes": "Wikipedia gives the second generation hatch as 2012 to 2019 (global). Carsguide shows pricing from 2015 to 2019 and says the V40 was born in 2012, but gives no Australian launch or end year, so year_from and year_to are blank. Engines come from the carsguide pricing and fuel tables, which are not fully consistent. Hist 2013 start not verified."
+  },
+  {
+    "id": "5dc388b8-9d8a-43b7-aaed-8bc546570d23",
+    "family": "Eos",
+    "series": null,
+    "year_from": 2007,
+    "year_to": 2014,
+    "in_production": false,
+    "vehicle_class": "passenger",
+    "fuel_type": null,
+    "engine": "2.0 L TSI petrol (155 TSI); 2.0 L TDI diesel (103 TDI)",
+    "confidence": "medium",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Volkswagen_Eos",
+      "https://www.carsguide.com.au/volkswagen/eos"
+    ],
+    "notes": "Wikipedia says sales in Australia began January 2007. Carsguide says it was sold in Australia from 2007 to 2014. The chassis code 1F was not confirmed on either page, so series is left null. Engines come from carsguide, which notes diesel was added in a later update."
+  }
+]

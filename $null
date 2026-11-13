@@ -1,0 +1,10 @@
+﻿supabase : Initialising login role...
+At line:4 char:1
++ supabase db query --linked "select make_name || ' ' || name a, coales ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Initialising login role...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A new version of Supabase CLI is available: v3.1.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: 
+https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

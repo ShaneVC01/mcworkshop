@@ -8,7 +8,7 @@ A custom workshop management app for McCormacks 4WD (Sandgate, Brisbane QLD). Ph
 
 The business runs Oracle NetSuite, **production only, with no sandbox**. NetSuite is the system of record. This app gives staff a simple UI built for a mechanic business while NetSuite stays in the background. All NetSuite complexity lives in the integration layer and the UI never exposes NetSuite concepts or wording.
 
-Phase 1 is a complete prototype on mock data: **no database tables**. The only live connection is a read only NetSuite test on Admin, Integration, which calls the `customers-list` Edge Function on the Supabase project **McWorkshop** (`xckqgweflvfstbvppmsy`).
+Phase 1 is a complete prototype on mock data. Database tables exist only for the vehicle library (`vehicle_makes`, `vehicle_models` and friends, see [docs/supabase-handover.md](docs/supabase-handover.md)) and the role tables, and the screens do not read them yet. The only live connection from the app is a read only NetSuite test on Admin, Integration, which calls the `customers-list` Edge Function on the Supabase project **McWorkshop** (`xckqgweflvfstbvppmsy`).
 
 Read these before building:
 
@@ -40,7 +40,9 @@ There is no unit test runner yet. Browser checks run through the Playwright MCP 
 
 - `src/types/index.ts`: the domain model. `src/lib`: formatting (`format.ts`), capacity maths and conflict checks (`capacity.ts`), the job state machine (`job-state.ts`).
 - `src/data/queries.ts` (reads), `src/data/actions.ts` (writes), `src/data/hooks.ts` (the only thing screens import). `src/data/mock/` holds the seed and the mock engine (localStorage persistence, latency, outbox, cross tab updates). Screens must not import from `src/data/mock`.
-- `src/auth`: mock session and the permission matrix.
+- `src/auth`: mock session and the permission matrix. The matrix is data (`db.rolePermissions`, edited in Admin, Roles and access). `default-permissions.ts` holds the defaults and labels. Administrators always have everything and `admin.users` and `integration.view` stay administrator only.
+- Live vehicle library: Admin, Vehicle library reads the synced Supabase tables through `src/data/live-library.ts` (functions `vehicle-library-list` and `vehicle-library-sync`). It is read only until the write function exists. The service profile screens still use the mock library.
+- Admin: `src/routes/_office/admin.*.tsx` (People, Roles and access, Workshop, Vehicle library, Services, Integration) and `src/features/admin`. App owned configuration (staff, permissions, settings, library, profiles) writes through `writeConfig` in the mock store, which skips the outbox because none of it goes to NetSuite. `src/lib/service-profiles.ts` picks a vehicle's profile before the generic template. Closed days reach `isWorkingDay` through `setClosedDays`.
 - `src/components/shell`: adaptive shell, search, theme, install prompt. `src/components/states`: loading, empty, error, offline and `DataView`. `src/components/domain`: `RegoPlate`, `StatusPill`, `SyncBadge`, `JobTile`, `CapacityBar`.
 - `src/routes/_office/*`: office screens (pathless layout, so URLs have no prefix). `src/routes/mechanic/*`: technician screens. `src/features/planner`: the timeline.
 - Demo data is seeded around the current working day and stored in the browser. Reset it from Admin, Integration (sign in as Rickie or Bodie McCormack), or bump `DB_VERSION` in `src/data/mock/seed.ts` after changing the seed or the types.
@@ -56,7 +58,7 @@ Vite, React, TypeScript, Tailwind v4, shadcn/ui, TanStack Router (file based, `s
 3. We define our own domain model (customer, vehicle, booking, job card, inspection, quote, parts line, labour line, invoice, technician and so on). Shared types live in `src/types` so generated Supabase types can replace them later. No NetSuite record types, field names or internal IDs anywhere outside the integration layer.
 4. Target design for later phases: reads come from Supabase tables synced from NetSuite using SuiteQL. Writes go through an outbox table and a queue to NetSuite via Edge Functions, with retries and idempotency. **Every data function exposes a sync status (`synced`, `pending` or `failed`) and the UI shows it.**
 5. Auth is mocked, with the roles from the PRD: Advisor, Workshop Controller, Mechanic, Manager and Administrator.
-6. `supabase/` holds migrations and Edge Functions. Do not create tables yet.
+6. `supabase/` holds migrations and Edge Functions. Only create tables when Shane asks. Every schema change is a migration file in `supabase/migrations`, applied with `supabase db push --linked` (dry run first). Never change the remote by hand, because the migration history must match the repo.
 7. Keep these current in every slice:
    - `docs/netsuite-mapping.md`: each domain entity, its likely NetSuite record, fields, and whether it is read, write or both.
    - `docs/supabase-handover.md`: every data function with its intended query, RLS needs and whether it becomes a view, RPC or Edge Function.

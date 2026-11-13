@@ -32,9 +32,32 @@ export interface StaffUser {
   id: Id
   name: string
   role: Role
+  /** Job title as staff know it, for example "Mechanical manager". */
+  title?: string
+  /** Inactive people cannot sign in and are not offered for new work. */
+  active: boolean
   /** Set when the staff member is also a technician. */
   technicianId?: Id
 }
+
+/** Everything a role can be allowed to do. Labels and defaults are in src/auth/default-permissions.ts. */
+export type Action =
+  | 'calendar.view'
+  | 'booking.create'
+  | 'booking.move'
+  | 'booking.override-conflict'
+  | 'quote.manage'
+  | 'job.work'
+  | 'board.move'
+  | 'reports.view'
+  | 'money.view'
+  | 'admin.workshop'
+  | 'admin.catalogue.view'
+  | 'admin.catalogue.edit'
+  | 'admin.users'
+  | 'integration.view'
+
+export type RolePermissions = Record<Role, Action[]>
 
 export type Skill = 'servicing' | 'diagnostics' | 'suspension' | 'electrical' | 'brakes' | 'accessories'
 
@@ -93,6 +116,47 @@ export interface Vehicle {
   sync: SyncState
 }
 
+// ---- Workshop settings ------------------------------------------------------
+
+export interface ClosedDay {
+  /** Day key, YYYY-MM-DD in Australia/Brisbane. */
+  day: string
+  reason: string
+}
+
+export interface WorkshopSettings {
+  /** Default workshop hours, HH:mm. New technicians start with these. */
+  openTime: string
+  closeTime: string
+  breakMinutes: number
+  /** Billable hours each technician should book per day. The workshop target adds these up. */
+  dailyTargetHours: number
+  /** Labour rate per hour, integer cents excluding GST. */
+  labourRateCents: number
+  closedDays: ClosedDay[]
+}
+
+// ---- Vehicle library --------------------------------------------------------
+
+export type VehicleClass = '4wd' | 'passenger' | 'light-commercial'
+export type FuelType = 'diesel' | 'petrol' | 'hybrid' | 'electric'
+
+/** One make and model the workshop services. Will be read from the back office system later. */
+export interface VehicleModel {
+  id: Id
+  make: string
+  model: string
+  /** For example "79 Series". */
+  series?: string
+  yearFrom: number
+  /** Omitted means still in production. */
+  yearTo?: number
+  vehicleClass: VehicleClass
+  fuel: FuelType
+  engine?: string
+  active: boolean
+}
+
 // ---- Service templates ------------------------------------------------------
 
 export type ServiceCategory =
@@ -118,6 +182,10 @@ export interface TemplatePart {
   unitCents: number
 }
 
+/**
+ * A generic service, used when no vehicle profile exists. Scope it to a class of vehicle and a fuel
+ * when the work differs, for example a 30,000 km service for a diesel 4WD.
+ */
 export interface ServiceTemplate {
   id: Id
   name: string
@@ -128,6 +196,42 @@ export interface ServiceTemplate {
   bayType: BayType
   parts: TemplatePart[]
   checklist: ChecklistTemplateItem[]
+  /** Service interval for scheduled services. */
+  intervalKm?: number
+  vehicleClass?: VehicleClass
+  fuel?: FuelType
+  notes?: string
+  /** Omitted means active. Inactive templates are not offered on new bookings. */
+  active?: boolean
+}
+
+/** What a service needs on one make and model. Refines a generic template and wins over it. */
+export interface ServiceProfile {
+  id: Id
+  /** The generic service this profile refines. */
+  templateId: Id
+  modelId: Id
+  labourHours: number
+  parts: TemplatePart[]
+  /** Omitted means use the generic checklist. */
+  checklist?: ChecklistTemplateItem[]
+  notes?: string
+  active: boolean
+}
+
+/** What a booking will actually use for one vehicle and one service. */
+export interface ServicePlan {
+  template: ServiceTemplate
+  source: 'profile' | 'generic'
+  profile?: ServiceProfile
+  model?: VehicleModel
+  labourRateCents: number
+}
+
+/** Hours really booked against finished jobs, so profiles can be checked against reality. */
+export interface ServiceActual {
+  samples: number
+  averageHours: number
 }
 
 // ---- Bookings ---------------------------------------------------------------
@@ -371,6 +475,8 @@ export interface CapacitySummary {
   freeHours: number
   utilisation: number
   potentialUtilisation: number
+  /** Billable hours the workshop aims to book, from the daily target in Admin. */
+  targetHours: number
   byTechnician: DayCapacity[]
 }
 
@@ -452,6 +558,85 @@ export interface IntegrationCustomer {
   mobile?: string
   /** As formatted by the back office system, for example 11/11/2026. */
   createdAt?: string
+}
+
+// ---- Live vehicle library -----------------------------------------------------
+
+/** One row of the synced vehicle library (vehicle-library-list function). */
+export interface LibraryVehicle {
+  id: string
+  name: string
+  /** The plain model when the name carries a trim, for example FORTUNER for FORTUNER GXL. */
+  baseModel: string | null
+  family: string | null
+  series: string | null
+  makeId: string
+  makeName: string
+  yearFrom: number | null
+  yearTo: number | null
+  vehicleClass: string | null
+  classLabel: string | null
+  fuel: string | null
+  fuelLabel: string | null
+  engine: string | null
+  source: 'netsuite' | 'manual'
+  active: boolean
+  needsReview: boolean
+  lastSyncedAt: string | null
+  /** Customer vehicles on record for this model. */
+  vehicleCount: number
+  /** How many records the type and fuel were worked out from. */
+  evidenceVehicles: number | null
+  /** history: worked out from workshop records. research: checked against public sources. manual: set by staff. */
+  attributesSource: 'history' | 'research' | 'manual' | null
+  /** Research notes with confidence and source links. */
+  notes: string | null
+}
+
+export interface LibraryFilters {
+  search: string
+  makeId: string
+  modelId: string
+  sort: 'name' | 'popular'
+  /** A class code, or 'none' for vehicles with no type yet. Empty means any. */
+  vehicleClass: string
+  fuel: string
+  status: 'active' | 'inactive' | 'all'
+  source: '' | 'netsuite' | 'manual'
+  page: number
+  pageSize: number
+}
+
+export interface LibraryPage {
+  items: LibraryVehicle[]
+  total: number
+  facets: {
+    makes: { id: string; name: string; active: boolean; activeModels: number; models: number }[]
+    /** The models of the chosen make. Empty until a make is chosen. */
+    models: { id: string; name: string; vehicles: number }[]
+    classes: { code: string; label: string }[]
+    fuels: { code: string; label: string }[]
+  }
+  summary: {
+    activeModels: number
+    activeMakes: number
+    needingReview: number
+    lastSync: { at: string; fetched: number; inserted: number; updated: number; deactivated: number; skipped: number } | null
+  }
+}
+
+export interface LibraryHistoryResult {
+  dryRun: boolean
+  modelsMatched: number
+  classSet: number
+  fuelSet: number
+  yearsSet: number
+}
+
+export interface LibrarySyncResult {
+  dryRun: boolean
+  makes: { fetched: number; inserted: number; updated: number; deactivated: number }
+  models: { fetched: number; inserted: number; updated: number; deactivated: number; skipped: number }
 }
 
 // ---- Integration diagnostics --------------------------------------------------

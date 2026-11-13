@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as OfficeRouteImport } from './routes/_office'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MechanicRouteImport } from './routes/mechanic'
+import { Route as OfficeAdminRouteImport } from './routes/_office/admin'
 import { Route as OfficeCalendarRouteImport } from './routes/_office/calendar'
 import { Route as OfficeReportsRouteImport } from './routes/_office/reports'
 import { Route as OfficeTodayRouteImport } from './routes/_office/today'
@@ -21,7 +22,13 @@ import { Route as DevTokensRouteImport } from './routes/dev/tokens'
 import { Route as MechanicIndexRouteImport } from './routes/mechanic/index'
 import { Route as MechanicCompletedRouteImport } from './routes/mechanic/completed'
 import { Route as MechanicCurrentRouteImport } from './routes/mechanic/current'
+import { Route as OfficeAdminIndexRouteImport } from './routes/_office/admin.index'
 import { Route as OfficeAdminIntegrationRouteImport } from './routes/_office/admin.integration'
+import { Route as OfficeAdminRolesRouteImport } from './routes/_office/admin.roles'
+import { Route as OfficeAdminServicesRouteImport } from './routes/_office/admin.services'
+import { Route as OfficeAdminUsersRouteImport } from './routes/_office/admin.users'
+import { Route as OfficeAdminVehiclesRouteImport } from './routes/_office/admin.vehicles'
+import { Route as OfficeAdminWorkshopRouteImport } from './routes/_office/admin.workshop'
 import { Route as OfficeBookingsIndexRouteImport } from './routes/_office/bookings.index'
 import { Route as OfficeBookingsIdRouteImport } from './routes/_office/bookings.$id'
 import { Route as OfficeBookingsNewRouteImport } from './routes/_office/bookings.new'
@@ -49,6 +56,11 @@ const MechanicRoute = MechanicRouteImport.update({
   id: '/mechanic',
   path: '/mechanic',
   getParentRoute: () => rootRouteImport,
+} as any)
+const OfficeAdminRoute = OfficeAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => OfficeRoute,
 } as any)
 const OfficeCalendarRoute = OfficeCalendarRouteImport.update({
   id: '/calendar',
@@ -90,10 +102,40 @@ const MechanicCurrentRoute = MechanicCurrentRouteImport.update({
   path: '/current',
   getParentRoute: () => MechanicRoute,
 } as any)
+const OfficeAdminIndexRoute = OfficeAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => OfficeAdminRoute,
+} as any)
 const OfficeAdminIntegrationRoute = OfficeAdminIntegrationRouteImport.update({
-  id: '/admin/integration',
-  path: '/admin/integration',
-  getParentRoute: () => OfficeRoute,
+  id: '/integration',
+  path: '/integration',
+  getParentRoute: () => OfficeAdminRoute,
+} as any)
+const OfficeAdminRolesRoute = OfficeAdminRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => OfficeAdminRoute,
+} as any)
+const OfficeAdminServicesRoute = OfficeAdminServicesRouteImport.update({
+  id: '/services',
+  path: '/services',
+  getParentRoute: () => OfficeAdminRoute,
+} as any)
+const OfficeAdminUsersRoute = OfficeAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => OfficeAdminRoute,
+} as any)
+const OfficeAdminVehiclesRoute = OfficeAdminVehiclesRouteImport.update({
+  id: '/vehicles',
+  path: '/vehicles',
+  getParentRoute: () => OfficeAdminRoute,
+} as any)
+const OfficeAdminWorkshopRoute = OfficeAdminWorkshopRouteImport.update({
+  id: '/workshop',
+  path: '/workshop',
+  getParentRoute: () => OfficeAdminRoute,
 } as any)
 const OfficeBookingsIndexRoute = OfficeBookingsIndexRouteImport.update({
   id: '/bookings/',
@@ -142,6 +184,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/mechanic': typeof MechanicRouteWithChildren
+  '/admin': typeof OfficeAdminRouteWithChildren
   '/calendar': typeof OfficeCalendarRoute
   '/reports': typeof OfficeReportsRoute
   '/today': typeof OfficeTodayRoute
@@ -151,9 +194,15 @@ export interface FileRoutesByFullPath {
   '/mechanic/current': typeof MechanicCurrentRoute
   '/mechanic/': typeof MechanicIndexRoute
   '/admin/integration': typeof OfficeAdminIntegrationRoute
+  '/admin/roles': typeof OfficeAdminRolesRoute
+  '/admin/services': typeof OfficeAdminServicesRoute
+  '/admin/users': typeof OfficeAdminUsersRoute
+  '/admin/vehicles': typeof OfficeAdminVehiclesRoute
+  '/admin/workshop': typeof OfficeAdminWorkshopRoute
   '/bookings/$id': typeof OfficeBookingsIdRoute
   '/bookings/new': typeof OfficeBookingsNewRoute
   '/vehicles/$id': typeof OfficeVehiclesIdRoute
+  '/admin/': typeof OfficeAdminIndexRoute
   '/bookings/': typeof OfficeBookingsIndexRoute
   '/vehicles/': typeof OfficeVehiclesIndexRoute
   '/mechanic/jobs/$id/inspection': typeof MechanicJobsIdInspectionRoute
@@ -172,9 +221,15 @@ export interface FileRoutesByTo {
   '/mechanic/current': typeof MechanicCurrentRoute
   '/mechanic': typeof MechanicIndexRoute
   '/admin/integration': typeof OfficeAdminIntegrationRoute
+  '/admin/roles': typeof OfficeAdminRolesRoute
+  '/admin/services': typeof OfficeAdminServicesRoute
+  '/admin/users': typeof OfficeAdminUsersRoute
+  '/admin/vehicles': typeof OfficeAdminVehiclesRoute
+  '/admin/workshop': typeof OfficeAdminWorkshopRoute
   '/bookings/$id': typeof OfficeBookingsIdRoute
   '/bookings/new': typeof OfficeBookingsNewRoute
   '/vehicles/$id': typeof OfficeVehiclesIdRoute
+  '/admin': typeof OfficeAdminIndexRoute
   '/bookings': typeof OfficeBookingsIndexRoute
   '/vehicles': typeof OfficeVehiclesIndexRoute
   '/mechanic/jobs/$id/inspection': typeof MechanicJobsIdInspectionRoute
@@ -187,6 +242,7 @@ export interface FileRoutesById {
   '/_office': typeof OfficeRouteWithChildren
   '/login': typeof LoginRoute
   '/mechanic': typeof MechanicRouteWithChildren
+  '/_office/admin': typeof OfficeAdminRouteWithChildren
   '/_office/calendar': typeof OfficeCalendarRoute
   '/_office/reports': typeof OfficeReportsRoute
   '/_office/today': typeof OfficeTodayRoute
@@ -196,9 +252,15 @@ export interface FileRoutesById {
   '/mechanic/current': typeof MechanicCurrentRoute
   '/mechanic/': typeof MechanicIndexRoute
   '/_office/admin/integration': typeof OfficeAdminIntegrationRoute
+  '/_office/admin/roles': typeof OfficeAdminRolesRoute
+  '/_office/admin/services': typeof OfficeAdminServicesRoute
+  '/_office/admin/users': typeof OfficeAdminUsersRoute
+  '/_office/admin/vehicles': typeof OfficeAdminVehiclesRoute
+  '/_office/admin/workshop': typeof OfficeAdminWorkshopRoute
   '/_office/bookings/$id': typeof OfficeBookingsIdRoute
   '/_office/bookings/new': typeof OfficeBookingsNewRoute
   '/_office/vehicles/$id': typeof OfficeVehiclesIdRoute
+  '/_office/admin/': typeof OfficeAdminIndexRoute
   '/_office/bookings/': typeof OfficeBookingsIndexRoute
   '/_office/vehicles/': typeof OfficeVehiclesIndexRoute
   '/mechanic/jobs/$id/inspection': typeof MechanicJobsIdInspectionRoute
@@ -211,6 +273,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/mechanic'
+    | '/admin'
     | '/calendar'
     | '/reports'
     | '/today'
@@ -220,9 +283,15 @@ export interface FileRouteTypes {
     | '/mechanic/current'
     | '/mechanic/'
     | '/admin/integration'
+    | '/admin/roles'
+    | '/admin/services'
+    | '/admin/users'
+    | '/admin/vehicles'
+    | '/admin/workshop'
     | '/bookings/$id'
     | '/bookings/new'
     | '/vehicles/$id'
+    | '/admin/'
     | '/bookings/'
     | '/vehicles/'
     | '/mechanic/jobs/$id/inspection'
@@ -241,9 +310,15 @@ export interface FileRouteTypes {
     | '/mechanic/current'
     | '/mechanic'
     | '/admin/integration'
+    | '/admin/roles'
+    | '/admin/services'
+    | '/admin/users'
+    | '/admin/vehicles'
+    | '/admin/workshop'
     | '/bookings/$id'
     | '/bookings/new'
     | '/vehicles/$id'
+    | '/admin'
     | '/bookings'
     | '/vehicles'
     | '/mechanic/jobs/$id/inspection'
@@ -255,6 +330,7 @@ export interface FileRouteTypes {
     | '/_office'
     | '/login'
     | '/mechanic'
+    | '/_office/admin'
     | '/_office/calendar'
     | '/_office/reports'
     | '/_office/today'
@@ -264,9 +340,15 @@ export interface FileRouteTypes {
     | '/mechanic/current'
     | '/mechanic/'
     | '/_office/admin/integration'
+    | '/_office/admin/roles'
+    | '/_office/admin/services'
+    | '/_office/admin/users'
+    | '/_office/admin/vehicles'
+    | '/_office/admin/workshop'
     | '/_office/bookings/$id'
     | '/_office/bookings/new'
     | '/_office/vehicles/$id'
+    | '/_office/admin/'
     | '/_office/bookings/'
     | '/_office/vehicles/'
     | '/mechanic/jobs/$id/inspection'
@@ -311,6 +393,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/mechanic'
       preLoaderRoute: typeof MechanicRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_office/admin': {
+      id: '/_office/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof OfficeAdminRouteImport
+      parentRoute: typeof OfficeRoute
     }
     '/_office/calendar': {
       id: '/_office/calendar'
@@ -368,12 +457,54 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MechanicCurrentRouteImport
       parentRoute: typeof MechanicRoute
     }
+    '/_office/admin/': {
+      id: '/_office/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof OfficeAdminIndexRouteImport
+      parentRoute: typeof OfficeAdminRoute
+    }
     '/_office/admin/integration': {
       id: '/_office/admin/integration'
-      path: '/admin/integration'
+      path: '/integration'
       fullPath: '/admin/integration'
       preLoaderRoute: typeof OfficeAdminIntegrationRouteImport
-      parentRoute: typeof OfficeRoute
+      parentRoute: typeof OfficeAdminRoute
+    }
+    '/_office/admin/roles': {
+      id: '/_office/admin/roles'
+      path: '/roles'
+      fullPath: '/admin/roles'
+      preLoaderRoute: typeof OfficeAdminRolesRouteImport
+      parentRoute: typeof OfficeAdminRoute
+    }
+    '/_office/admin/services': {
+      id: '/_office/admin/services'
+      path: '/services'
+      fullPath: '/admin/services'
+      preLoaderRoute: typeof OfficeAdminServicesRouteImport
+      parentRoute: typeof OfficeAdminRoute
+    }
+    '/_office/admin/users': {
+      id: '/_office/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof OfficeAdminUsersRouteImport
+      parentRoute: typeof OfficeAdminRoute
+    }
+    '/_office/admin/vehicles': {
+      id: '/_office/admin/vehicles'
+      path: '/vehicles'
+      fullPath: '/admin/vehicles'
+      preLoaderRoute: typeof OfficeAdminVehiclesRouteImport
+      parentRoute: typeof OfficeAdminRoute
+    }
+    '/_office/admin/workshop': {
+      id: '/_office/admin/workshop'
+      path: '/workshop'
+      fullPath: '/admin/workshop'
+      preLoaderRoute: typeof OfficeAdminWorkshopRouteImport
+      parentRoute: typeof OfficeAdminRoute
     }
     '/_office/bookings/': {
       id: '/_office/bookings/'
@@ -434,12 +565,36 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface OfficeAdminRouteChildren {
+  OfficeAdminIntegrationRoute: typeof OfficeAdminIntegrationRoute
+  OfficeAdminRolesRoute: typeof OfficeAdminRolesRoute
+  OfficeAdminServicesRoute: typeof OfficeAdminServicesRoute
+  OfficeAdminUsersRoute: typeof OfficeAdminUsersRoute
+  OfficeAdminVehiclesRoute: typeof OfficeAdminVehiclesRoute
+  OfficeAdminWorkshopRoute: typeof OfficeAdminWorkshopRoute
+  OfficeAdminIndexRoute: typeof OfficeAdminIndexRoute
+}
+
+const OfficeAdminRouteChildren: OfficeAdminRouteChildren = {
+  OfficeAdminIntegrationRoute: OfficeAdminIntegrationRoute,
+  OfficeAdminRolesRoute: OfficeAdminRolesRoute,
+  OfficeAdminServicesRoute: OfficeAdminServicesRoute,
+  OfficeAdminUsersRoute: OfficeAdminUsersRoute,
+  OfficeAdminVehiclesRoute: OfficeAdminVehiclesRoute,
+  OfficeAdminWorkshopRoute: OfficeAdminWorkshopRoute,
+  OfficeAdminIndexRoute: OfficeAdminIndexRoute,
+}
+
+const OfficeAdminRouteWithChildren = OfficeAdminRoute._addFileChildren(
+  OfficeAdminRouteChildren,
+)
+
 interface OfficeRouteChildren {
+  OfficeAdminRoute: typeof OfficeAdminRouteWithChildren
   OfficeCalendarRoute: typeof OfficeCalendarRoute
   OfficeReportsRoute: typeof OfficeReportsRoute
   OfficeTodayRoute: typeof OfficeTodayRoute
   OfficeWorkshopRoute: typeof OfficeWorkshopRoute
-  OfficeAdminIntegrationRoute: typeof OfficeAdminIntegrationRoute
   OfficeBookingsIdRoute: typeof OfficeBookingsIdRoute
   OfficeBookingsNewRoute: typeof OfficeBookingsNewRoute
   OfficeVehiclesIdRoute: typeof OfficeVehiclesIdRoute
@@ -448,11 +603,11 @@ interface OfficeRouteChildren {
 }
 
 const OfficeRouteChildren: OfficeRouteChildren = {
+  OfficeAdminRoute: OfficeAdminRouteWithChildren,
   OfficeCalendarRoute: OfficeCalendarRoute,
   OfficeReportsRoute: OfficeReportsRoute,
   OfficeTodayRoute: OfficeTodayRoute,
   OfficeWorkshopRoute: OfficeWorkshopRoute,
-  OfficeAdminIntegrationRoute: OfficeAdminIntegrationRoute,
   OfficeBookingsIdRoute: OfficeBookingsIdRoute,
   OfficeBookingsNewRoute: OfficeBookingsNewRoute,
   OfficeVehiclesIdRoute: OfficeVehiclesIdRoute,

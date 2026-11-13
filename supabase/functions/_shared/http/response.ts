@@ -13,6 +13,7 @@ export type ErrorCode =
   | 'netsuite_error'
   | 'netsuite_busy'
   | 'timeout'
+  | 'database_error'
   | 'internal_error'
 
 /** Throw this from any handler or shared module to return a clean error to the caller. */

@@ -3,6 +3,7 @@
  * Prices are placeholders and service schedules are not manufacturer data.
  * Bookings are laid out around the current working day so the demo always looks live.
  */
+import { defaultRolePermissions } from '@/auth/default-permissions'
 import { addDays, addMinutes, addWorkingDays, at, nowIso, workingToday } from '@/lib/format'
 import type {
   ActivityEvent,
@@ -13,11 +14,15 @@ import type {
   JobCard,
   JobStatus,
   RegoState,
+  RolePermissions,
+  ServiceProfile,
   ServiceTemplate,
   StaffUser,
   SyncLogEntry,
   Technician,
   Vehicle,
+  VehicleModel,
+  WorkshopSettings,
 } from '@/types'
 
 export const LABOUR_RATE_CENTS = 16500
@@ -29,6 +34,12 @@ export interface Database {
   technicians: Technician[]
   bays: Bay[]
   templates: ServiceTemplate[]
+  /** Vehicle library: the makes and models the workshop services. */
+  library: VehicleModel[]
+  /** Service profiles: what a service needs on one make and model. */
+  profiles: ServiceProfile[]
+  settings: WorkshopSettings
+  rolePermissions: RolePermissions
   customers: Customer[]
   vehicles: Vehicle[]
   bookings: Booking[]
@@ -38,7 +49,7 @@ export interface Database {
   counters: { booking: number; job: number; id: number }
 }
 
-export const DB_VERSION = 6
+export const DB_VERSION = 7
 
 const synced = () => ({ status: 'synced' as const, lastSyncedAt: nowIso() })
 
@@ -79,13 +90,13 @@ const inspectChecklist = (labels: string[]) => [...labels.map((l) => check(l)), 
 
 const templates: ServiceTemplate[] = [
   {
-    id: 'svc-10k', name: '10,000 km service', category: 'Scheduled service', division: 'servicing',
+    id: 'svc-10k', name: '10,000 km service', category: 'Scheduled service', division: 'servicing', intervalKm: 10000,
     labourHours: 2, skill: 'servicing', bayType: 'hoist',
     parts: [{ name: 'Engine oil 5W-30, 9 L', qty: 1, unitCents: 11800 }, { name: 'Oil filter', qty: 1, unitCents: 3400 }],
     checklist: serviceChecklist,
   },
   {
-    id: 'svc-40k', name: '40,000 km service', category: 'Scheduled service', division: 'servicing',
+    id: 'svc-40k', name: '40,000 km service', category: 'Scheduled service', division: 'servicing', intervalKm: 40000,
     labourHours: 3.5, skill: 'servicing', bayType: 'hoist',
     parts: [
       { name: 'Engine oil 5W-30, 9 L', qty: 1, unitCents: 11800 }, { name: 'Oil filter', qty: 1, unitCents: 3400 },
@@ -95,12 +106,33 @@ const templates: ServiceTemplate[] = [
     checklist: serviceChecklist,
   },
   {
-    id: 'svc-120k', name: '120,000 km major service', category: 'Scheduled service', division: 'servicing',
+    id: 'svc-120k', name: '120,000 km major service', category: 'Scheduled service', division: 'servicing', intervalKm: 120000,
     labourHours: 3.5, skill: 'servicing', bayType: 'hoist',
     parts: [
       { name: 'Engine oil 5W-30, 9 L', qty: 1, unitCents: 11800 }, { name: 'Oil filter', qty: 1, unitCents: 3400 },
       { name: 'Air filter', qty: 1, unitCents: 5900 }, { name: 'Fuel filter', qty: 1, unitCents: 7200 },
       { name: 'Diff and transfer oils', qty: 1, unitCents: 14500 }, { name: 'Coolant, 10 L', qty: 1, unitCents: 9800 },
+    ],
+    checklist: serviceChecklist,
+  },
+  // Generic starting points for vehicles that have no profile yet.
+  {
+    id: 'svc-30k-4wd', name: '30,000 km service, 4WD diesel', category: 'Scheduled service', division: 'servicing', intervalKm: 30000,
+    vehicleClass: '4wd', fuel: 'diesel', notes: 'Generic starting point. Replace with a vehicle profile once the real times are known.',
+    labourHours: 3, skill: 'servicing', bayType: 'hoist',
+    parts: [
+      { name: 'Engine oil 5W-30 diesel, 8 L', qty: 1, unitCents: 10400 }, { name: 'Oil filter', qty: 1, unitCents: 3400 },
+      { name: 'Fuel filter', qty: 1, unitCents: 7200 }, { name: 'Air filter', qty: 1, unitCents: 5900 },
+    ],
+    checklist: serviceChecklist,
+  },
+  {
+    id: 'svc-30k-pass', name: '30,000 km service, passenger petrol', category: 'Scheduled service', division: 'servicing', intervalKm: 30000,
+    vehicleClass: 'passenger', fuel: 'petrol', notes: 'Generic starting point for cars and small SUVs.',
+    labourHours: 2, skill: 'servicing', bayType: 'hoist',
+    parts: [
+      { name: 'Engine oil 5W-30, 5 L', qty: 1, unitCents: 7600 }, { name: 'Oil filter', qty: 1, unitCents: 2400 },
+      { name: 'Air filter', qty: 1, unitCents: 4200 }, { name: 'Spark plugs', qty: 4, unitCents: 1800 },
     ],
     checklist: serviceChecklist,
   },
@@ -138,22 +170,91 @@ const templates: ServiceTemplate[] = [
 ]
 
 const staff: StaffUser[] = [
-  { id: 'u-sean', name: 'Sean Poiani', role: 'advisor' },
-  { id: 'u-craig', name: 'Craig Hinckley', role: 'controller' },
-  { id: 'u-brendan', name: 'Brendan Pallier', role: 'manager' },
-  { id: 'u-harley', name: 'Harley Adams', role: 'manager' },
-  { id: 'u-bodie', name: 'Bodie McCormack', role: 'admin' },
-  { id: 'u-rickie', name: 'Rickie McCormack', role: 'admin' },
-  { id: 'u-ali', name: 'Ali Baba Azizi', role: 'mechanic', technicianId: 't1' },
-  { id: 'u-ben', name: 'Ben Wenger', role: 'mechanic', technicianId: 't5' },
-  { id: 'u-brad', name: 'Brad Mulder', role: 'mechanic', technicianId: 't9' },
-  { id: 'u-brodie', name: 'Brodie Biddle', role: 'mechanic', technicianId: 't3' },
-  { id: 'u-cheng', name: 'Cheng Yang', role: 'mechanic', technicianId: 't2' },
-  { id: 'u-chris', name: 'Chris Scriven', role: 'mechanic', technicianId: 't4' },
-  { id: 'u-cody', name: 'Cody Boreham', role: 'mechanic', technicianId: 't6' },
-  { id: 'u-curtis', name: 'Curtis Williams', role: 'mechanic', technicianId: 't7' },
-  { id: 'u-dale', name: 'Dale Coleman', role: 'mechanic', technicianId: 't8' },
+  { id: 'u-sean', name: 'Sean Poiani', role: 'advisor', title: 'Service advisor', active: true },
+  { id: 'u-craig', name: 'Craig Hinckley', role: 'controller', title: 'Workshop controller', active: true },
+  { id: 'u-brendan', name: 'Brendan Pallier', role: 'manager', title: 'Workshop manager', active: true },
+  { id: 'u-harley', name: 'Harley Adams', role: 'manager', title: 'Workshop manager', active: true },
+  { id: 'u-bodie', name: 'Bodie McCormack', role: 'admin', title: 'Owner', active: true },
+  { id: 'u-rickie', name: 'Rickie McCormack', role: 'admin', title: 'Owner', active: true },
+  { id: 'u-ali', name: 'Ali Baba Azizi', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't1' },
+  { id: 'u-ben', name: 'Ben Wenger', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't5' },
+  { id: 'u-brad', name: 'Brad Mulder', role: 'mechanic', title: 'Fitter', active: true, technicianId: 't9' },
+  { id: 'u-brodie', name: 'Brodie Biddle', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't3' },
+  { id: 'u-cheng', name: 'Cheng Yang', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't2' },
+  { id: 'u-chris', name: 'Chris Scriven', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't4' },
+  { id: 'u-cody', name: 'Cody Boreham', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't6' },
+  { id: 'u-curtis', name: 'Curtis Williams', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't7' },
+  { id: 'u-dale', name: 'Dale Coleman', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't8' },
 ]
+
+// Invented demo entries, not manufacturer data. The real library will be read from the back office system.
+const lib = (
+  id: string, make: string, model: string, series: string | undefined, yearFrom: number, yearTo: number | undefined,
+  vehicleClass: VehicleModel['vehicleClass'], fuel: VehicleModel['fuel'], engine?: string,
+): VehicleModel => ({ id, make, model, series, yearFrom, yearTo, vehicleClass, fuel, engine, active: true })
+
+const library: VehicleModel[] = [
+  lib('m-lc79', 'Toyota', 'LandCruiser', '79 Series', 2007, undefined, '4wd', 'diesel', '4.5 L V8 turbo diesel'),
+  lib('m-lc200', 'Toyota', 'LandCruiser', '200 Series', 2007, 2021, '4wd', 'diesel', '4.5 L V8 turbo diesel'),
+  lib('m-lc300', 'Toyota', 'LandCruiser', '300 Series', 2021, undefined, '4wd', 'diesel', '3.3 L V6 twin turbo diesel'),
+  lib('m-prado150', 'Toyota', 'Prado', '150 Series', 2009, 2023, '4wd', 'diesel', '2.8 L turbo diesel'),
+  lib('m-hilux', 'Toyota', 'Hilux', undefined, 2015, undefined, 'light-commercial', 'diesel', '2.8 L turbo diesel'),
+  lib('m-ranger', 'Ford', 'Ranger', undefined, 2011, undefined, 'light-commercial', 'diesel', '3.2 L five cylinder diesel'),
+  lib('m-everest', 'Ford', 'Everest', undefined, 2015, undefined, '4wd', 'diesel', '2.0 L bi-turbo diesel'),
+  lib('m-dmax', 'Isuzu', 'D-MAX', undefined, 2012, undefined, 'light-commercial', 'diesel', '3.0 L turbo diesel'),
+  lib('m-mux', 'Isuzu', 'MU-X', undefined, 2013, undefined, '4wd', 'diesel', '3.0 L turbo diesel'),
+  lib('m-patrol', 'Nissan', 'Patrol', undefined, 2013, undefined, '4wd', 'petrol', '5.6 L V8 petrol'),
+  lib('m-navara', 'Nissan', 'Navara', undefined, 2015, undefined, 'light-commercial', 'diesel', '2.3 L twin turbo diesel'),
+  lib('m-triton', 'Mitsubishi', 'Triton', undefined, 2015, undefined, 'light-commercial', 'diesel', '2.4 L turbo diesel'),
+  lib('m-pajero-sport', 'Mitsubishi', 'Pajero Sport', undefined, 2015, undefined, '4wd', 'diesel', '2.4 L turbo diesel'),
+  lib('m-bt50', 'Mazda', 'BT-50', undefined, 2011, undefined, 'light-commercial', 'diesel', '3.0 L turbo diesel'),
+  lib('m-amarok', 'Volkswagen', 'Amarok', undefined, 2011, undefined, 'light-commercial', 'diesel', '3.0 L V6 turbo diesel'),
+  lib('m-ram', 'RAM', '1500', undefined, 2019, undefined, 'light-commercial', 'petrol', '5.7 L V8 petrol'),
+  lib('m-mazda3', 'Mazda', 'Mazda3', undefined, 2014, undefined, 'passenger', 'petrol', '2.0 L petrol'),
+  lib('m-corolla', 'Toyota', 'Corolla', undefined, 2012, undefined, 'passenger', 'petrol', '2.0 L petrol'),
+]
+
+const profiles: ServiceProfile[] = [
+  {
+    id: 'p-lc79-40k', templateId: 'svc-40k', modelId: 'm-lc79', labourHours: 3,
+    parts: [
+      { name: 'Engine oil 15W-40 diesel, 11 L', qty: 1, unitCents: 14900 }, { name: 'Oil filter', qty: 1, unitCents: 3900 },
+      { name: 'Fuel filter', qty: 1, unitCents: 8900 }, { name: 'Air filter', qty: 1, unitCents: 6400 },
+    ],
+    notes: 'Two fuel filters on the dual tank models. Check the snorkel before the air filter.', active: true,
+  },
+  {
+    id: 'p-hilux-10k', templateId: 'svc-10k', modelId: 'm-hilux', labourHours: 1.5,
+    parts: [{ name: 'Engine oil 5W-30 diesel, 7 L', qty: 1, unitCents: 9800 }, { name: 'Oil filter', qty: 1, unitCents: 3100 }],
+    active: true,
+  },
+  {
+    id: 'p-ranger-40k', templateId: 'svc-40k', modelId: 'm-ranger', labourHours: 3.5,
+    parts: [
+      { name: 'Engine oil 5W-30 diesel, 8.5 L', qty: 1, unitCents: 11200 }, { name: 'Oil filter', qty: 1, unitCents: 3600 },
+      { name: 'Fuel filter', qty: 1, unitCents: 7800 }, { name: 'Air filter', qty: 1, unitCents: 5200 },
+    ],
+    active: true,
+  },
+  {
+    id: 'p-dmax-10k', templateId: 'svc-10k', modelId: 'm-dmax', labourHours: 1.5,
+    parts: [{ name: 'Engine oil 5W-30 diesel, 7 L', qty: 1, unitCents: 9800 }, { name: 'Oil filter', qty: 1, unitCents: 2900 }],
+    active: true,
+  },
+  {
+    id: 'p-prado-120k', templateId: 'svc-120k', modelId: 'm-prado150', labourHours: 4,
+    parts: [
+      { name: 'Engine oil 5W-30 diesel, 7.5 L', qty: 1, unitCents: 10600 }, { name: 'Oil filter', qty: 1, unitCents: 3400 },
+      { name: 'Air filter', qty: 1, unitCents: 5900 }, { name: 'Fuel filter', qty: 1, unitCents: 8200 },
+      { name: 'Diff and transfer oils', qty: 1, unitCents: 14500 }, { name: 'Coolant, 10 L', qty: 1, unitCents: 9800 },
+    ],
+    notes: 'Also check the DPF health and the front diff breather.', active: true,
+  },
+]
+
+function defaultSettings(): WorkshopSettings {
+  return { openTime: '07:00', closeTime: '15:30', breakMinutes: 30, dailyTargetHours: 6, labourRateCents: LABOUR_RATE_CENTS, closedDays: [] }
+}
 
 const bays: Bay[] = [
   { id: 'bay1', name: 'Bay 1', type: 'hoist' },
@@ -262,10 +363,14 @@ const rows: Row[] = [
   { day: 3, tech: 3, start: '09:00', template: 'diag-elec', vehicle: 17 },
 ]
 
-export function buildJobParts(template: ServiceTemplate, nextId: () => string) {
+export function buildJobParts(
+  template: Pick<ServiceTemplate, 'name' | 'labourHours' | 'parts' | 'checklist'>,
+  nextId: () => string,
+  rateCents = LABOUR_RATE_CENTS,
+) {
   return {
     labour: [
-      { id: nextId(), description: template.name, hours: template.labourHours, rateCents: LABOUR_RATE_CENTS, source: 'template' as const, done: false },
+      { id: nextId(), description: template.name, hours: template.labourHours, rateCents, source: 'template' as const, done: false },
     ],
     parts: template.parts.map((p) => ({ id: nextId(), ...p, source: 'template' as const, used: false })),
     checklist: template.checklist.map((c) => ({ id: nextId(), ...c })),
@@ -410,7 +515,8 @@ export function createSeed(): Database {
   add({ day: -1, tech: 3, start: '07:30', template: 'svc-40k', vehicle: 0 }, addDays(today, -279))
 
   return {
-    version: DB_VERSION, seededFor: today, staff, technicians, bays, templates, customers, vehicles,
+    version: DB_VERSION, seededFor: today, staff, technicians, bays, templates, library, profiles,
+    settings: defaultSettings(), rolePermissions: defaultRolePermissions(), customers, vehicles,
     bookings, jobs, activity, outbox: [], counters: { booking: number, job: number, id: 0 },
   }
 }

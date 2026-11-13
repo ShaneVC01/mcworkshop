@@ -137,6 +137,7 @@ export function CapacityFigures({ capacity }: { capacity: CapacitySummary }) {
     { label: 'Tentative', value: formatHours(capacity.tentativeHours) },
     { label: over ? 'Over' : 'Free', value: formatHours(Math.abs(capacity.freeHours)), tone: over ? 'text-status-blocked' : 'text-primary-strong' },
     { label: 'Booked', value: formatPercent(capacity.utilisation) },
+    ...(capacity.targetHours > 0 ? [{ label: 'Target', value: formatHours(capacity.targetHours) }] : []),
   ]
   return (
     <dl className="tabular flex flex-wrap gap-x-6 gap-y-2">

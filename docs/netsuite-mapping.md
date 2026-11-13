@@ -7,7 +7,34 @@ relatedTo: []
 
 # NetSuite mapping
 
-How each entity in our domain model (`src/types/index.ts`) is expected to map to NetSuite. Nothing here has been checked against the McCormacks account yet. Every row is **unconfirmed** until we can inspect the account read only, and no mapping may be hard coded outside the integration layer (Supabase Edge Functions).
+How each entity in our domain model (`src/types/index.ts`) is expected to map to NetSuite. The table below is the original expectation and is **unconfirmed** unless the next section says otherwise. A read only discovery of the McCormacks account on 11/11/2026 confirmed the records in the next section. No mapping may be hard coded outside the integration layer (Supabase Edge Functions).
+
+## Confirmed by discovery (11/11/2026)
+
+Full findings and numbers are in [discovery/PROFILE.md](../discovery/PROFILE.md). Where this section and the table below disagree, this section wins.
+
+| Our entity | Confirmed NetSuite home | Notes |
+|---|---|---|
+| Job card | **Case** (`supportcase`), one per vehicle visit | Statuses are only Not Started, In Progress, For Billing and Closed. Case type (Service, Repair, Accessory Fitment, Tyres), job subtype, department and estimated effort are on the case. The linked sales order is `custevent_nx_case_transaction` and the vehicle is `custevent_nx_case_asset` |
+| Booking | **FSM task** (standard `task` table with `custevent_nx_*` fields) under the case, assigned to an employee | Task statuses are NOTSTART, PROGRESS and COMPLETE. Task type is "Workshop". Daily estimated hours are on the task |
+| Job status | Case status plus task status | Only four stages exist. Waiting approval, waiting parts, checked in and quality check are not recorded |
+| Vehicle | `customrecord_nx_asset` (20,532 records) | VIN, year, fuel, body, transmission, odometer unit, next service date. Make and model are `customrecord_ajg_make` and `customrecord_ajg_make_model`. The sales order also carries rego, VIN and odometer as body fields |
+| Technician | `employee` | Title examples: Fitter, Mechanic, Auto Electrician, Spray Painter. No employee is flagged as a job resource |
+| Quote | `estimate`, converting to `salesorder` | Link type `EstInvc` |
+| Labour line and parts line | Lines on the sales order | Labour is sold as non inventory items (LAB4WD, LAB, LABELEC). Parts are inventory items, often special ordered through a purchase order per job |
+| Time entry | `timebill`, created by FSM | Hours only. Every one uses "Workshop Labour *DO NOT USE*" and none are billable. Never write these directly |
+| Invoice | `invoice`, then `customerpayment` | Sales order to invoice is link type `OrdBill`. Read only |
+| Division | Department on the case | Mechanical holds Service, Repair and Tyres. McCormack's 4WD holds Accessory Fitment |
+
+### Admin catalogue and settings (added with the Admin section)
+
+| Our entity | NetSuite home | Direction |
+|---|---|---|
+| Vehicle library (`VehicleModel`) | `customrecord_ajg_make` (62 records) and `customrecord_ajg_make_model` (591 records, 30 inactive). A model's make is `custrecord_make`. The model name is `name`, and `custrecord_agj_model` sometimes holds the base model ("FORTUNER" for "FORTUNER GXL") | **Read**. Tables `vehicle_makes` and `vehicle_models` are live and empty until the sync is built. Class, fuel, years and engine are not in NetSuite, so staff set them. Names are not unique per make, 4 models have no make and some names carry stray spaces |
+| Service profile and generic template | None. NetSuite has no service schedule. Labour sells as non inventory items (LAB4WD, LAB, LABELEC) and parts as inventory items | **App only**. A booking sends the work list as lines in the case details text |
+| Labour rate | The labour items' price, which differs by division | Read for reference. The app's rate is its own setting |
+| Staff, roles, permissions | Employee for identity matching only. Bays also exist as employee style records | **App only**. Do not import bay records as people |
+| Workshop hours, daily target, closed days | The FSM work calendar and non working day records | **App only** for now. Read the calendar later if staff already maintain it there |
 
 Direction: **Read** means synced from NetSuite into Supabase with SuiteQL. **Write** means sent from our outbox to NetSuite. All writes default to dry run and need explicit approval before going live (see [CLAUDE.md](../CLAUDE.md) and [env.md](env.md)).
 

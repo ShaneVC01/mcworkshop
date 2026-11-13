@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { CalendarDays, Car, ChartColumn, ClipboardList, Columns3, NotebookPen, Settings } from 'lucide-react'
-import { can } from '@/auth/permissions'
-import { getSession, useSession } from '@/auth/session'
+import { useCanAdmin } from '@/auth/permissions'
+import { getSession } from '@/auth/session'
 import { AppShell, type NavItem } from '@/components/shell/app-shell'
 
 export const Route = createFileRoute('/_office')({
@@ -23,9 +23,7 @@ const nav: NavItem[] = [
 ]
 
 function OfficeLayout() {
-  const user = useSession()
-  const items: NavItem[] = can(user?.role, 'integration.view')
-    ? [...nav, { to: '/admin/integration', label: 'Admin', icon: Settings }]
-    : nav
+  const showAdmin = useCanAdmin()
+  const items: NavItem[] = showAdmin ? [...nav, { to: '/admin', label: 'Admin', icon: Settings }] : nav
   return <AppShell nav={items} />
 }

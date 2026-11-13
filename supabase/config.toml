@@ -420,3 +420,15 @@ enabled = true
 [functions.customers-list]
 enabled = true
 verify_jwt = false
+
+[functions.vehicle-library-sync]
+enabled = true
+verify_jwt = false
+
+[functions.vehicle-library-list]
+enabled = true
+verify_jwt = false
+
+[functions.vehicle-library-enrich]
+enabled = true
+verify_jwt = false

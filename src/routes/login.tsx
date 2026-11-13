@@ -31,7 +31,7 @@ function LoginPage() {
             {(people) => (
               <div className="space-y-6">
                 {order.map((role) => {
-                  const group = people.filter((p) => p.role === role)
+                  const group = people.filter((p) => p.role === role && p.active !== false)
                   if (!group.length) return null
                   return (
                     <section key={role}>

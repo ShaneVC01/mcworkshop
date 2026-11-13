@@ -7,10 +7,12 @@ import {
   addWorkingDays, dayKey, gstOf, minutesBetween, normaliseRego, nowIso, workingToday,
 } from '@/lib/format'
 import { isFinished, ON_SITE } from '@/lib/job-state'
+import { findLibraryModel, resolveServicePlan } from '@/lib/service-profiles'
 import type {
   ActivityEvent, AvailabilityRequest, AvailabilitySlot, Bay, Booking, CapacitySummary, Id, InvoiceSummary,
-  JobCard, Quote, Result, ScheduledJob, SearchHit, ServiceTemplate, StaffUser, SyncLogEntry, Technician,
-  TimelineVisit, TodaySummary, Totals, UtilisationReport, VehicleDetail,
+  JobCard, Quote, Result, RolePermissions, ScheduledJob, SearchHit, ServiceActual, ServicePlan, ServiceProfile,
+  ServiceTemplate, StaffUser, SyncLogEntry, Technician, TimelineVisit, TodaySummary, Totals, UtilisationReport,
+  VehicleDetail, VehicleModel, WorkshopSettings,
 } from '@/types'
 import type { Database } from './mock/seed'
 import { DataError, getDb, getSettings, read, type MockSettings } from './mock/store'
@@ -62,6 +64,47 @@ export const getStaff = (): Promise<Result<StaffUser[]>> => read((db) => db.staf
 export const getTechnicians = (): Promise<Result<Technician[]>> => read((db) => db.technicians)
 export const getBays = (): Promise<Result<Bay[]>> => read((db) => db.bays)
 export const getServiceTemplates = (): Promise<Result<ServiceTemplate[]>> => read((db) => db.templates)
+
+// ---- Admin: permissions, workshop settings and the service catalogue ----------------------------
+
+export const getRolePermissions = (): Promise<Result<RolePermissions>> => read((db) => db.rolePermissions)
+export const getWorkshopSettings = (): Promise<Result<WorkshopSettings>> => read((db) => db.settings)
+export const getVehicleLibrary = (): Promise<Result<VehicleModel[]>> => read((db) => db.library)
+export const getServiceProfiles = (): Promise<Result<ServiceProfile[]>> => read((db) => db.profiles)
+
+/** What a booking would use for this vehicle and service: the profile if there is one, else the generic template. */
+export const getServicePlan = (vehicleId: Id | undefined, templateId: Id): Promise<Result<ServicePlan>> =>
+  read((db) => {
+    const template = db.templates.find((t) => t.id === templateId)
+    if (!template) throw new DataError('That service could not be found.')
+    const vehicle = vehicleId ? db.vehicles.find((v) => v.id === vehicleId) : undefined
+    return resolveServicePlan(template, vehicle, db.library, db.profiles, db.settings.labourRateCents)
+  })
+
+/**
+ * Hours actually spent on finished jobs, so a profile's estimate can be checked against reality.
+ * Keys are "template:<id>" for every job of that service and "profile:<id>" for jobs on the profile's model.
+ */
+export const getServiceActuals = (): Promise<Result<Record<string, ServiceActual>>> =>
+  read((db) => {
+    const sums = new Map<string, { total: number; n: number }>()
+    const add = (key: string, hours: number) => {
+      const cur = sums.get(key) ?? { total: 0, n: 0 }
+      sums.set(key, { total: cur.total + hours, n: cur.n + 1 })
+    }
+    for (const job of db.jobs) {
+      const hours = job.timeEntries.reduce(
+        (sum, t) => sum + (t.endedAt ? minutesBetween(t.startedAt, t.endedAt) / 60 : 0), 0)
+      const booking = db.bookings.find((b) => b.id === job.bookingId)
+      if (!booking?.serviceTemplateId || !isFinished(job.status) || hours <= 0) continue
+      add(`template:${booking.serviceTemplateId}`, hours)
+      const vehicle = db.vehicles.find((v) => v.id === job.vehicleId)
+      const model = vehicle ? findLibraryModel(vehicle, db.library) : undefined
+      const profile = model && db.profiles.find((p) => p.templateId === booking.serviceTemplateId && p.modelId === model.id)
+      if (profile) add(`profile:${profile.id}`, hours)
+    }
+    return Object.fromEntries([...sums].map(([key, v]) => [key, { samples: v.n, averageHours: v.total / v.n }]))
+  })
 
 // ---- Search, customers and vehicles ------------------------------------------------------
 
@@ -149,7 +192,7 @@ export const getSchedule = (fromDay: string, toDay: string): Promise<Result<Sche
   read((db) => db.bookings.filter((b) => inRange(b, fromDay, toDay)).map((b) => toScheduled(db, b)).sort(byStart))
 
 function capacityFor(db: Database, days: string[]): CapacitySummary[] {
-  return days.map((day) => dayCapacity(day, db.technicians, db.bookings))
+  return days.map((day) => dayCapacity(day, db.technicians, db.bookings, db.settings.dailyTargetHours))
 }
 
 export const getCapacity = (days: string[]): Promise<Result<CapacitySummary[]>> => read((db) => capacityFor(db, days))
@@ -247,7 +290,7 @@ export const getTodaySummary = (day: string): Promise<Result<TodaySummary>> =>
     })
     const count = (test: (s: ScheduledJob) => boolean) => live.filter(test).length
     const busy = new Set(live.filter((s) => s.job.status === 'IN_PROGRESS').flatMap((s) => s.booking.technicianIds))
-    const capacity = dayCapacity(day, db.technicians, db.bookings)
+    const capacity = dayCapacity(day, db.technicians, db.bookings, db.settings.dailyTargetHours)
     return {
       day, capacity,
       counts: {
