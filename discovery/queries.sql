@@ -202,3 +202,27 @@ SELECT a.custrecord_nxc_na_model AS model_id, a.custrecord_nxc_na_bodytype AS bo
 -- v_model_subtype (12/11/2026 20:36, 1969 rows, RAW)
 SELECT a.custrecord_nxc_na_model AS model_id, BUILTIN.DF(c.custevent_nxc_job_subtype) AS subtype, COUNT(*) AS n FROM supportcase c JOIN customrecord_nx_asset a ON a.id = c.custevent_nx_case_asset WHERE a.custrecord_nxc_na_model IS NOT NULL AND c.custevent_nxc_job_subtype IS NOT NULL GROUP BY a.custrecord_nxc_na_model, BUILTIN.DF(c.custevent_nxc_job_subtype);
 
+-- today_cases (17/11/2026 16:07, 260 rows)
+SELECT c.id, c.casenumber, c.createddate, c.lastmodifieddate, c.startdate, c.status, BUILTIN.DF(c.status) AS status_name, BUILTIN.DF(c.custevent_nx_case_type) AS case_type_name, BUILTIN.DF(c.custevent_nxc_job_subtype) AS job_subtype_name, BUILTIN.DF(c.custevent_ajg_deparmtnet_for_so) AS so_department_name, c.custevent_nx_case_asset, c.custevent_nx_case_transaction, c.custevent_created_from_quote, c.custevent_nxc_est_hours FROM supportcase c WHERE c.lastmodifieddate >= SYSDATE - 2 OR c.startdate >= SYSDATE - 2;
+
+-- today_tasks (17/11/2026 16:07, 513 rows)
+SELECT t.id, t.supportcase, t.transaction, t.status, t.createddate, t.lastmodifieddate, t.startdate, t.enddate, t.completeddate, t.assigned, BUILTIN.DF(t.custevent_nx_task_type) AS task_type_name, BUILTIN.DF(t.custevent_nxc_task_result) AS result_name, t.custevent_nx_start_date, t.custevent_nx_start_time, t.custevent_nx_end_date, t.custevent_nx_end_time, t.custevent_nx_task_start, t.custevent_nx_task_end, t.custevent_nxc_task_dailyestimatedhours, t.custevent_nx_task_booking_confirmed FROM task t WHERE t.lastmodifieddate >= SYSDATE - 2 OR t.startdate >= SYSDATE - 2;
+
+-- e2e_links (17/11/2026 16:08, 42 rows)
+SELECT l.previousdoc, l.nextdoc, l.linktype FROM nexttransactionlink l WHERE l.previousdoc IN (391076,391250,391093,391268,391242,391290,391074,391051,391257,391224,391047,391225) OR l.nextdoc IN (391076,391250,391093,391268,391242,391290,391074,391051,391257,391224,391047,391225);
+
+-- e2e_cases (17/11/2026 16:08, 12 rows)
+SELECT c.id, TO_CHAR(c.createddate,'DD/MM/YYYY HH24:MI') AS created_at, TO_CHAR(c.lastmodifieddate,'DD/MM/YYYY HH24:MI') AS modified_at, BUILTIN.DF(c.status) AS status_name, c.custevent_nx_case_transaction AS so_id, c.custevent_created_from_quote AS from_quote, CASE WHEN c.custevent_odometer_reading IS NULL THEN 0 ELSE 1 END AS has_odo FROM supportcase c WHERE c.id IN (1353929,1354240,1356482,1358517,1361258,1363295,1364110,1367475,1367476,1367887,1369924,1372866);
+
+-- e2e_tasks (17/11/2026 16:08, 13 rows)
+SELECT t.id, t.supportcase, t.transaction, t.status, BUILTIN.DF(t.custevent_nx_task_type) AS task_type_name, BUILTIN.DF(t.custevent_nxc_task_result) AS result_name, TO_CHAR(t.createddate,'DD/MM/YYYY HH24:MI') AS created_at, TO_CHAR(t.completeddate,'DD/MM/YYYY HH24:MI') AS completed_at, TO_CHAR(t.custevent_nx_task_start,'DD/MM/YYYY HH24:MI') AS nx_task_start, TO_CHAR(t.custevent_nx_task_end,'DD/MM/YYYY HH24:MI') AS nx_task_end, t.custevent_nx_start_time, t.custevent_nx_end_time, t.custevent_nxc_task_dailyestimatedhours AS est_hours, CASE WHEN t.custevent_nx_actions_taken IS NULL THEN 0 ELSE 1 END AS has_actions FROM task t WHERE t.supportcase IN (1353929,1354240,1356482,1358517,1361258,1363295,1364110,1367475,1367476,1367887,1369924,1372866);
+
+-- e2e_timebills (17/11/2026 16:08, 16 rows)
+SELECT b.id, b.custcol_nx_case, b.custcol_nx_task, b.hours, b.isbillable, TO_CHAR(b.createddate,'DD/MM/YYYY HH24:MI') AS created_at, b.custcol_nxc_start_time, b.custcol_nxc_finish_time, CASE WHEN b.custcol_nxc_start_check IS NULL THEN 0 ELSE 1 END AS has_start_check, CASE WHEN b.custcol_nxc_finish_check IS NULL THEN 0 ELSE 1 END AS has_finish_check FROM timebill b WHERE b.custcol_nx_case IN (1353929,1354240,1356482,1358517,1361258,1363295,1364110,1367475,1367476,1367887,1369924,1372866);
+
+-- e2e_trans (17/11/2026 16:08, 38 rows)
+SELECT t.id, t.type, BUILTIN.DF(t.status) AS status_name, TO_CHAR(t.createddate,'DD/MM/YYYY HH24:MI') AS created_at, TO_CHAR(t.lastmodifieddate,'DD/MM/YYYY HH24:MI') AS modified_at, t.trandate, BUILTIN.DF(t.employee) AS employee_name, t.source FROM transaction t WHERE t.id IN (352437,386557,389822,391047,391051,391052,391055,391056,391057,391074,391076,391093,391095,391097,391114,391115,391224,391225,391226,391241,391242,391243,391244,391247,391248,391250,391252,391253,391257,391264,391268,391270,391271,391275,391276,391286,391288,391290);
+
+-- e2e_sysnotes (17/11/2026 16:08, 0 rows)
+SELECT n.recordtypeid, n.recordid, TO_CHAR(n.date,'DD/MM/YYYY HH24:MI') AS at, BUILTIN.DF(n.context) AS context_name, n.type, n.field, BUILTIN.DF(n.role) AS role_name FROM systemnote n WHERE n.recordid IN (352437,386557,389822,391047,391051,391052,391055,391056,391057,391074,391076,391093,391095,391097,391114,391115,391224,391225,391226,391241,391242,391243,391244,391247,391248,391250,391252,391253,391257,391264,391268,391270,391271,391275,391276,391286,391288,391290) AND n.date >= SYSDATE - 30;
+

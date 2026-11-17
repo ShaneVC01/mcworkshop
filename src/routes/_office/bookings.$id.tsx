@@ -113,7 +113,7 @@ function Header({ s, sync }: { s: ScheduledJob; sync: 'synced' | 'pending' | 'fa
       </div>
       <div className="tabular mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
         <JobStatusPill job={job} />
-        <span>{technicians.length ? technicians.map((t) => t.name.split(' ')[0]).join(', ') : 'No technician'}</span>
+        <span>{technicians.length ? technicians.map((t) => t.name.split(' ')[0]).join(', ') : 'No mechanic'}</span>
         {bay && <span>{bay.name}</span>}
         <span>
           {formatDayRelative(dayKey(booking.startAt))} {formatTime(booking.startAt)}, expected {formatTime(job.promisedAt)}
@@ -170,7 +170,7 @@ function Overview({ s }: { s: ScheduledJob }) {
         <p className="text-lg">"{job.customerConcern}"</p>
         {job.mechanicSummary && (
           <>
-            <h3 className="mt-4 mb-1 text-lg">Technician summary</h3>
+            <h3 className="mt-4 mb-1 text-lg">Mechanic summary</h3>
             <p>{job.mechanicSummary}</p>
             <p className="tabular text-sm text-muted-foreground">
               {job.completedBy}, {job.completedAt && formatDateTime(job.completedAt)}
@@ -278,7 +278,7 @@ function Work({ job, booking }: { job: JobCard; booking: ScheduledJob['booking']
                 <Check className={cn('size-5 shrink-0', p.used ? 'text-primary-strong' : 'text-border')} aria-label={p.used ? 'Used' : 'Not used yet'} />
                 <span className="min-w-0 flex-1">
                   {p.qty} x {p.name}
-                  {p.source === 'technician' && <span className="ml-2 text-sm text-muted-foreground">added by technician</span>}
+                  {p.source === 'technician' && <span className="ml-2 text-sm text-muted-foreground">added by mechanic</span>}
                 </span>
                 {p.unitCents > 0 && <span className="font-semibold">{formatMoney(p.qty * p.unitCents)}</span>}
               </li>
@@ -294,7 +294,7 @@ function Findings({ job, onQuote }: { job: JobCard; onQuote: () => void }) {
   if (job.findings.length === 0) {
     return (
       <Card>
-        <EmptyState title="No findings yet">Anything the technician reports during the inspection shows here straight away.</EmptyState>
+        <EmptyState title="No findings yet">Anything the mechanic reports during the inspection shows here straight away.</EmptyState>
       </Card>
     )
   }

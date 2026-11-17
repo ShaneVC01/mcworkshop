@@ -367,7 +367,7 @@ function CompleteSheet({ open, s, onClose }: { open: boolean; s: ScheduledJob; o
             Go to the checklist
           </Link>
         )}
-        <Field label="Technician summary">
+        <Field label="Mechanic summary">
           <textarea className={cn(fieldClass, 'h-auto py-2')} rows={4} value={summary} onChange={(e) => setSummary(e.target.value)} />
         </Field>
         <Field label="Odometer, km">

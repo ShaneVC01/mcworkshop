@@ -115,7 +115,7 @@ function NewBookingPage() {
               )}
             </DataView>
             <div className="mt-4">
-              <Field label="In the customer's words" hint="Write it as they say it. The technician's diagnosis is recorded separately.">
+              <Field label="In the customer's words" hint="Write it as they say it. The mechanic's diagnosis is recorded separately.">
                 <textarea
                   value={concern}
                   onChange={(e) => setConcern(e.target.value)}
@@ -134,7 +134,7 @@ function NewBookingPage() {
               <DataView query={availability} loading={<Skeleton className="h-32" />}>
                 {() =>
                   slots.length === 0 ? (
-                    <p className="font-semibold">No opening in the next three weeks for a technician with this skill. Place it by hand on the calendar.</p>
+                    <p className="font-semibold">No opening in the next three weeks for a mechanic with this skill. Place it by hand on the calendar.</p>
                   ) : (
                     <ul className="space-y-2" role="radiogroup" aria-label="Available times">
                       {slots.map((s) => {
@@ -193,7 +193,7 @@ function NewBookingPage() {
                   <dl className="tabular mt-4 space-y-1.5 rounded-lg bg-secondary p-3">
                     <Row label="Drop off" value={`${formatDate(slot.startAt)}, ${formatTime(slot.startAt)}`} />
                     <Row label="Expected ready" value={formatTime(addMinutes(slot.endAt, 60))} />
-                    <Row label="Technician" value={slot.technicianName.split(' ')[0]!} />
+                    <Row label="Mechanic" value={slot.technicianName.split(' ')[0]!} />
                   </dl>
                 )}
               </>

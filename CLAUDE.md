@@ -105,7 +105,7 @@ Australian English (labour, tyre, colour, utilisation). AUD with GST at 10 perce
 4. Use the `frontend-design` skill for UI work so screens look clean, intentional and on brand, not templated.
 5. Brand: only use tokens from `src/styles/tokens.css` (never raw hex in components). Oswald (`font-display`) for headings, navigation, buttons and plates, Inter for everything else. Uppercase only on buttons and plates. The `RegoPlate` component leads every vehicle card and header.
 6. Status colour is never the only signal. Use `StatusPill` and `status-tones.ts`, which pair colour with an icon and label. Use `SyncBadge` for sync state and never show the word NetSuite to staff.
-7. Workshop wording only: vehicle, rego, job, bay, technician, hours. Buttons say what happens ("Confirm booking", "Start job").
+7. Workshop wording only: vehicle, rego, job, bay, mechanic, hours. Staff see "mechanic", never "technician" (the NetSuite job title is Mechanic). Code keeps the `Technician` type and `technicianId`, since the custom build division will add fitters and auto electricians. Buttons say what happens ("Confirm booking", "Start job").
 
 ## PWA rules
 

@@ -94,7 +94,7 @@ export function JobTile({
         </span>
         <span className="inline-flex items-center gap-1">
           <UserRound className="size-4" aria-hidden="true" />
-          {technicians.length ? technicians.map((t) => t.name.split(' ')[0]).join(', ') : 'No technician'}
+          {technicians.length ? technicians.map((t) => t.name.split(' ')[0]).join(', ') : 'No mechanic'}
         </span>
         <span className="truncate">{customer.name}</span>
       </div>

@@ -153,8 +153,8 @@ export function Planner({ day, onDayChange }: { day: string; onDayChange: (day: 
             </button>
           ))}
         </div>
-        <select aria-label="Filter by technician" value={techFilter} onChange={(e) => setTechFilter(e.target.value)} className={cn(fieldClass, 'h-11 w-auto')}>
-          <option value="all">All technicians</option>
+        <select aria-label="Filter by mechanic" value={techFilter} onChange={(e) => setTechFilter(e.target.value)} className={cn(fieldClass, 'h-11 w-auto')}>
+          <option value="all">All mechanics</option>
           {(technicians.data?.data ?? []).map((t) => (
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
@@ -183,7 +183,7 @@ export function Planner({ day, onDayChange }: { day: string; onDayChange: (day: 
               <WeekGrid days={weekDays} techs={techs} capacity={capacity.data?.data ?? []} jobs={all} onPick={(d) => { onDayChange(d); setView('day') }} />
             ) : techs.length === 0 ? (
               <Card>
-                <EmptyState title="No technician matches those filters">Clear a filter to see the roster.</EmptyState>
+                <EmptyState title="No mechanic matches those filters">Clear a filter to see the roster.</EmptyState>
               </Card>
             ) : (
               <DndContext sensors={sensors} onDragEnd={onDragEnd}>
@@ -302,7 +302,7 @@ export function Planner({ day, onDayChange }: { day: string; onDayChange: (day: 
               ))}
             </ul>
             {pending.conflicts.some((c) => c.hard) ? (
-              <p className="text-muted-foreground">This cannot be booked. Pick another time or technician.</p>
+              <p className="text-muted-foreground">This cannot be booked. Pick another time or mechanic.</p>
             ) : !canOverride ? (
               <p className="text-muted-foreground">Only the workshop controller or manager can double book. Ask them, or pick another time.</p>
             ) : (
@@ -513,7 +513,7 @@ function UnassignedDrawer({ jobs, canMove, onOpen }: { jobs: ScheduledJob[]; can
         <span className="tabular rounded-full bg-secondary px-2 text-base">{jobs.length}</span>
       </h2>
       {jobs.length === 0 ? (
-        <p className="text-muted-foreground">Every job for this day has a technician. Drag a job here to unassign it.</p>
+        <p className="text-muted-foreground">Every job for this day has a mechanic. Drag a job here to unassign it.</p>
       ) : (
         <ul className="flex flex-wrap gap-2">
           {jobs.map((s) => (
@@ -564,7 +564,7 @@ function WeekGrid({
       <table className="w-full min-w-[40rem] border-collapse text-left">
         <thead>
           <tr className="border-b">
-            <th className="w-32 p-2 font-normal text-muted-foreground">Technician</th>
+            <th className="w-32 p-2 font-normal text-muted-foreground">Mechanic</th>
             {days.map((d) => {
               const c = capacity.find((x) => x.day === d)
               return (
@@ -694,7 +694,7 @@ function BookingPreview({
         {!locked && (
           <fieldset className="space-y-3 border-t pt-4">
             <legend className="font-display text-xl font-medium">Move or resize</legend>
-            <Field label="Technician">
+            <Field label="Mechanic">
               <select className={fieldClass} value={tech} onChange={(e) => setTech(e.target.value)}>
                 <option value="">Unassigned</option>
                 {technicians.map((t) => (

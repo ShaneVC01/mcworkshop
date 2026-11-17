@@ -325,7 +325,7 @@ function ProfileSheet({
                 </div>
               )}
             </div>
-            <Field label="Notes for the technician" hint="Shown with the booking. For example a part that is easy to miss.">
+            <Field label="Notes for the mechanic" hint="Shown with the booking. For example a part that is easy to miss.">
               <textarea value={notes} disabled={!canEdit} onChange={(e) => setNotes(e.target.value)} rows={2} className={cn(fieldClass, 'h-auto py-2')} />
             </Field>
             <label className="flex min-h-touch items-center gap-3">

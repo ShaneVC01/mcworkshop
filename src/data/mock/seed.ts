@@ -49,7 +49,7 @@ export interface Database {
   counters: { booking: number; job: number; id: number }
 }
 
-export const DB_VERSION = 7
+export const DB_VERSION = 8
 
 const synced = () => ({ status: 'synced' as const, lastSyncedAt: nowIso() })
 
@@ -176,15 +176,11 @@ const staff: StaffUser[] = [
   { id: 'u-harley', name: 'Harley Adams', role: 'manager', title: 'Workshop manager', active: true },
   { id: 'u-bodie', name: 'Bodie McCormack', role: 'admin', title: 'Owner', active: true },
   { id: 'u-rickie', name: 'Rickie McCormack', role: 'admin', title: 'Owner', active: true },
-  { id: 'u-ali', name: 'Ali Baba Azizi', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't1' },
-  { id: 'u-ben', name: 'Ben Wenger', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't5' },
-  { id: 'u-brad', name: 'Brad Mulder', role: 'mechanic', title: 'Fitter', active: true, technicianId: 't9' },
-  { id: 'u-brodie', name: 'Brodie Biddle', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't3' },
-  { id: 'u-cheng', name: 'Cheng Yang', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't2' },
-  { id: 'u-chris', name: 'Chris Scriven', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't4' },
-  { id: 'u-cody', name: 'Cody Boreham', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't6' },
-  { id: 'u-curtis', name: 'Curtis Williams', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't7' },
-  { id: 'u-dale', name: 'Dale Coleman', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't8' },
+  // The three active mechanics in the Mechanical department (servicing). Fitters and the auto
+  // electrician belong to McCormack's 4WD (custom builds) and are not part of phase 1.
+  { id: 'u-ben', name: 'Ben Wenger', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't1' },
+  { id: 'u-dale', name: 'Dale Coleman', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't2' },
+  { id: 'u-jared', name: 'Jared Wyllie', role: 'mechanic', title: 'Mechanic', active: true, technicianId: 't3' },
 ]
 
 // Invented demo entries, not manufacturer data. The real library will be read from the back office system.
@@ -314,53 +310,50 @@ interface Row {
 }
 
 const rows: Row[] = [
+  // tech: 0 Ben, 1 Dale, 2 Jared, -1 not yet assigned. Each has an 8 hour day (07:00 to 15:30, 30 minute break).
   // previous working day, all closed
   { day: -1, tech: 0, start: '07:00', template: 'svc-40k', vehicle: 1 },
-  { day: -1, tech: 1, start: '07:30', template: 'diag-elec', vehicle: 2, concern: 'Dash lights flicker when the fridge is running.' },
-  { day: -1, tech: 2, start: '08:00', template: 'rep-bearing', vehicle: 3 },
-  { day: -1, tech: 3, start: '07:00', template: 'acc-fit', vehicle: 4, concern: 'Fit customer supplied light bar and UHF.' },
-  { day: -1, tech: 4, start: '09:00', template: 'svc-10k', vehicle: 5 },
-  { day: -1, tech: 5, start: '07:30', template: 'insp-pretrip', vehicle: 6, concern: 'Heading to Cape York in two weeks.' },
+  { day: -1, tech: 0, start: '11:00', template: 'svc-10k', vehicle: 5 },
+  { day: -1, tech: 1, start: '07:30', template: 'rep-bearing', vehicle: 3 },
+  { day: -1, tech: 1, start: '11:00', template: 'diag-elec', vehicle: 2, concern: 'Dash lights flicker when the fridge is running.' },
+  { day: -1, tech: 2, start: '07:00', template: 'acc-fit', vehicle: 4, concern: 'Fit customer supplied light bar and UHF.' },
+  { day: -1, tech: 2, start: '11:30', template: 'insp-pretrip', vehicle: 6, concern: 'Heading to Cape York in two weeks.' },
   // today
   { day: 0, tech: 0, start: '07:00', template: 'svc-120k', vehicle: 7, status: 'IN_PROGRESS' },
-  { day: 0, tech: 0, start: '11:30', template: 'rep-brake', vehicle: 8, status: 'CHECKED_IN' },
-  { day: 0, tech: 1, start: '07:30', template: 'diag-elec', vehicle: 9, status: 'WAITING_APPROVAL', concern: 'Battery light comes on at idle with the headlights on.' },
-  { day: 0, tech: 1, start: '10:30', template: 'svc-10k', vehicle: 10, status: 'CONFIRMED' },
+  { day: 0, tech: 0, start: '11:00', template: 'rep-brake', vehicle: 8, status: 'CHECKED_IN' },
+  { day: 0, tech: 0, start: '13:00', template: 'insp-pretrip', vehicle: 14, status: 'CONFIRMED', concern: 'Towing a van to Birdsville next month.' },
+  { day: 0, tech: 1, start: '07:00', template: 'svc-40k', vehicle: 13, status: 'TECH_COMPLETE' },
+  { day: 0, tech: 1, start: '10:30', template: 'diag-elec', vehicle: 9, status: 'WAITING_APPROVAL', concern: 'Battery light comes on at idle with the headlights on.' },
+  { day: 0, tech: 1, start: '13:00', template: 'insp-susp', vehicle: 16, status: 'BOOKED', tentative: true },
   { day: 0, tech: 2, start: '07:00', template: 'rep-bearing', vehicle: 11, status: 'WAITING_PARTS', concern: 'Humming from the rear that gets louder with speed.' },
-  { day: 0, tech: 2, start: '11:00', template: 'insp-susp', vehicle: 12, status: 'CHECKED_IN', concern: 'Knocking from left front when turning slowly.' },
-  { day: 0, tech: 3, start: '07:00', template: 'svc-40k', vehicle: 13, status: 'TECH_COMPLETE' },
-  { day: 0, tech: 3, start: '11:30', template: 'insp-pretrip', vehicle: 14, status: 'CONFIRMED', concern: 'Towing a van to Birdsville next month.' },
-  { day: 0, tech: 5, start: '08:00', template: 'svc-10k', vehicle: 15, status: 'BLOCKED' },
-  { day: 0, tech: 5, start: '13:00', template: 'insp-susp', vehicle: 16, status: 'BOOKED', tentative: true },
+  { day: 0, tech: 2, start: '10:30', template: 'svc-10k', vehicle: 15, status: 'BLOCKED' },
+  { day: 0, tech: 2, start: '13:00', template: 'insp-susp', vehicle: 12, status: 'CHECKED_IN', concern: 'Knocking from left front when turning slowly.' },
   { day: 0, tech: -1, start: '09:00', template: 'insp-pretrip', vehicle: 17, status: 'CONFIRMED' },
+  { day: 0, tech: -1, start: '10:30', template: 'svc-10k', vehicle: 10, status: 'CONFIRMED' },
   { day: 0, tech: -1, start: '13:00', template: 'diag-elec', vehicle: 18, status: 'CONFIRMED', concern: 'Whining noise under the dash on cold start.' },
-  // next working day
+  // next working day, Jared at training in the afternoon
   { day: 1, tech: 0, start: '07:00', template: 'svc-10k', vehicle: 19 },
-  { day: 1, tech: 0, start: '10:00', template: 'rep-brake', vehicle: 20 },
+  { day: 1, tech: 0, start: '09:30', template: 'rep-brake', vehicle: 20 },
+  { day: 1, tech: 0, start: '11:30', template: 'svc-40k', vehicle: 22 },
   { day: 1, tech: 1, start: '07:30', template: 'acc-fit', vehicle: 21, concern: 'Fit dual battery system.' },
-  { day: 1, tech: 3, start: '08:00', template: 'svc-40k', vehicle: 22 },
-  { day: 1, tech: 4, start: '07:00', template: 'insp-pretrip', vehicle: 23 },
-  { day: 1, tech: 2, start: '09:00', template: 'insp-susp', vehicle: 2 },
-  // an over capacity day, with one technician on leave
+  { day: 1, tech: 1, start: '12:00', template: 'insp-pretrip', vehicle: 23 },
+  { day: 1, tech: 2, start: '07:00', template: 'insp-susp', vehicle: 2 },
+  // an over capacity day, with Jared on leave
   { day: 2, tech: 0, start: '07:00', template: 'svc-120k', vehicle: 3 },
   { day: 2, tech: 0, start: '10:30', template: 'rep-bearing', vehicle: 4 },
   { day: 2, tech: 0, start: '13:30', template: 'rep-brake', vehicle: 5 },
   { day: 2, tech: 1, start: '07:00', template: 'svc-40k', vehicle: 6 },
   { day: 2, tech: 1, start: '11:00', template: 'diag-elec', vehicle: 1 },
-  { day: 2, tech: 2, start: '07:00', template: 'acc-fit', vehicle: 8, concern: 'Fit bull bar and winch.' },
-  { day: 2, tech: 2, start: '11:00', template: 'svc-40k', vehicle: 10 },
-  { day: 2, tech: 2, start: '14:30', template: 'insp-susp', vehicle: 12 },
-  { day: 2, tech: 3, start: '07:00', template: 'svc-40k', vehicle: 14 },
-  { day: 2, tech: 3, start: '10:30', template: 'svc-120k', vehicle: 16 },
-  { day: 2, tech: 3, start: '14:00', template: 'insp-pretrip', vehicle: 18 },
-  { day: 2, tech: 4, start: '07:00', template: 'rep-bearing', vehicle: 20 },
-  { day: 2, tech: 4, start: '10:30', template: 'svc-40k', vehicle: 22 },
+  { day: 2, tech: 1, start: '13:00', template: 'insp-susp', vehicle: 12 },
+  { day: 2, tech: 1, start: '14:00', template: 'insp-pretrip', vehicle: 18 },
+  { day: 2, tech: -1, start: '07:00', template: 'acc-fit', vehicle: 8, concern: 'Fit bull bar and winch.' },
   { day: 2, tech: -1, start: '08:00', template: 'svc-10k', vehicle: 9 },
+  { day: 2, tech: -1, start: '11:00', template: 'svc-40k', vehicle: 10 },
   // later in the week
   { day: 3, tech: 0, start: '08:00', template: 'svc-10k', vehicle: 11 },
   { day: 3, tech: 1, start: '07:00', template: 'svc-40k', vehicle: 13, tentative: true },
+  { day: 3, tech: 1, start: '11:00', template: 'diag-elec', vehicle: 17 },
   { day: 3, tech: 2, start: '07:30', template: 'insp-pretrip', vehicle: 15 },
-  { day: 3, tech: 3, start: '09:00', template: 'diag-elec', vehicle: 17 },
 ]
 
 export function buildJobParts(
@@ -385,23 +378,15 @@ export function createSeed(): Database {
   const dayFor = (offset: number) => (offset === 0 ? today : addWorkingDays(today, offset))
 
   const technicians: Technician[] = [
-    { id: 't1', name: 'Ali Baba Azizi', skills: ['servicing', 'brakes', 'suspension'] },
-    { id: 't2', name: 'Cheng Yang', skills: ['diagnostics', 'electrical', 'servicing', 'accessories'] },
-    { id: 't3', name: 'Brodie Biddle', skills: ['suspension', 'brakes', 'servicing', 'accessories'] },
-    { id: 't4', name: 'Chris Scriven', skills: ['servicing', 'accessories', 'electrical'] },
-    { id: 't5', name: 'Ben Wenger', skills: ['servicing', 'brakes', 'suspension'] },
-    { id: 't6', name: 'Cody Boreham', skills: ['diagnostics', 'servicing', 'suspension', 'electrical'] },
-    { id: 't7', name: 'Curtis Williams', skills: ['servicing', 'brakes', 'electrical'] },
-    { id: 't8', name: 'Dale Coleman', skills: ['servicing', 'diagnostics', 'suspension'] },
-    // Brad is a fitter: accessories and fit outs rather than servicing.
-    { id: 't9', name: 'Brad Mulder', skills: ['accessories', 'electrical', 'suspension'] },
+    // The Mechanical department's mechanics. Skills are demo values, not from the back office system.
+    { id: 't1', name: 'Ben Wenger', skills: ['servicing', 'brakes', 'suspension'] },
+    { id: 't2', name: 'Dale Coleman', skills: ['servicing', 'diagnostics', 'electrical', 'suspension', 'accessories'] },
+    { id: 't3', name: 'Jared Wyllie', skills: ['servicing', 'brakes', 'suspension', 'accessories'] },
   ].map((t) => ({ ...t, shiftStart: '07:00', shiftEnd: '15:30', breakMinutes: 30, active: true, unavailable: [] }) as Technician)
 
-  technicians[4]!.unavailable.push({ day: today, reason: 'sick' })
-  technicians[5]!.unavailable.push(
+  technicians[2]!.unavailable.push(
     { day: dayFor(1), reason: 'training', from: '13:00', to: '15:30' },
     { day: dayFor(2), reason: 'leave' },
-    { day: dayFor(3), reason: 'leave' },
   )
 
   const customers: Customer[] = customerRows.map(([name, mobile, postcode], i) => ({
@@ -512,7 +497,7 @@ export function createSeed(): Database {
     description: 'Front pads have about 5 mm left. Check again at the next service.', photos: [],
     approvalStatus: 'not-required', createdAt: history.completedAt!, createdBy: technicians[0]!.name,
   })
-  add({ day: -1, tech: 3, start: '07:30', template: 'svc-40k', vehicle: 0 }, addDays(today, -279))
+  add({ day: -1, tech: 1, start: '07:30', template: 'svc-40k', vehicle: 0 }, addDays(today, -279))
 
   return {
     version: DB_VERSION, seededFor: today, staff, technicians, bays, templates, library, profiles,

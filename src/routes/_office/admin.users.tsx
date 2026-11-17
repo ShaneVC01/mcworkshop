@@ -195,7 +195,7 @@ function PersonSheet({
               onChange={(e) => setBooked(e.target.checked)}
               className="size-5 accent-[var(--primary)]"
             />
-            {role === 'mechanic' ? 'Technicians are always booked onto jobs' : 'Also works on jobs as a technician'}
+            {role === 'mechanic' ? 'Mechanics are always booked onto jobs' : 'Also works on jobs as a mechanic'}
           </label>
           {isTechnician && (
             <>

@@ -490,7 +490,7 @@ export const saveStaffMember = (input: StaffInput): Promise<Result<StaffUser>> =
     if (db.staff.some((u) => u.id !== input.id && u.name.toLowerCase() === name.toLowerCase())) {
       throw new DataError(`${name} is already on the list.`)
     }
-    if (input.role === 'mechanic' && !input.technician) throw new DataError('A technician needs shift hours.')
+    if (input.role === 'mechanic' && !input.technician) throw new DataError('A mechanic needs shift hours.')
     if (input.technician) checkHours(input.technician.shiftStart, input.technician.shiftEnd, input.technician.breakMinutes)
 
     const me = getSession()

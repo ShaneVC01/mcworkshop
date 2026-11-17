@@ -137,7 +137,7 @@ function BoardCard({ s, canMove }: { s: ScheduledJob; canMove: boolean }) {
       </div>
       <div className="truncate text-sm">{booking.serviceName}</div>
       <div className="tabular mt-1 text-sm text-muted-foreground">
-        {technicians.length ? technicians.map((t) => t.name.split(' ')[0]).join(', ') : 'No technician'}
+        {technicians.length ? technicians.map((t) => t.name.split(' ')[0]).join(', ') : 'No mechanic'}
         {job.status === 'IN_PROGRESS' && `, ${formatDuration(remaining)} left`}
       </div>
       {['IN_PROGRESS', 'WAITING_APPROVAL', 'WAITING_PARTS', 'BLOCKED'].includes(job.status) && (

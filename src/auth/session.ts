@@ -47,7 +47,7 @@ export function homeFor(role: Role) {
 export const ROLE_LABEL: Record<Role, string> = {
   advisor: 'Service advisor',
   controller: 'Workshop controller',
-  mechanic: 'Technician',
+  mechanic: 'Mechanic',
   manager: 'Workshop manager',
   admin: 'Administrator',
 }

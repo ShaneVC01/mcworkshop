@@ -158,7 +158,7 @@ function TokensPage() {
             <Button variant="destructive">Cancel booking</Button>
             <Button disabled>Complete job</Button>
           </div>
-          <p className="mt-6 mb-3 text-sm text-muted-foreground">Technician size, 56px tall</p>
+          <p className="mt-6 mb-3 text-sm text-muted-foreground">Mechanic size, 56px tall</p>
           <div className="flex flex-wrap items-center gap-3">
             <Button size="lg">
               <Play aria-hidden="true" />
@@ -191,7 +191,7 @@ function TokensPage() {
         <Section title="In context">
           <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
             <article className="rounded-xl bg-card p-5 shadow-card">
-              <p className="mb-3 text-sm font-semibold text-muted-foreground">Technician, current job</p>
+              <p className="mb-3 text-sm font-semibold text-muted-foreground">Mechanic, current job</p>
               <RegoPlate registration="923XYZ" size="lg" />
               <h3 className="mt-4 text-2xl">Toyota LandCruiser 79</h3>
               <p className="text-lg">120,000 km major service</p>
@@ -203,7 +203,7 @@ function TokensPage() {
             </article>
 
             <div className="rounded-xl bg-card p-5 shadow-card">
-              <p className="mb-3 text-sm font-semibold text-muted-foreground">Planner, one technician row</p>
+              <p className="mb-3 text-sm font-semibold text-muted-foreground">Planner, one mechanic row</p>
               <div className="mb-4">
                 <div className="tabular mb-1.5 flex justify-between text-sm">
                   <span className="font-semibold">James, 6.0 h of 8.0 h booked</span>

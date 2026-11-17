@@ -18,9 +18,9 @@ export interface ActionInfo {
 }
 
 export const ACTIONS: ActionInfo[] = [
-  { action: 'calendar.view', label: 'See the calendar', hint: 'Open the planner and technician timeline.', group: 'Planning' },
+  { action: 'calendar.view', label: 'See the calendar', hint: 'Open the planner and mechanic timeline.', group: 'Planning' },
   { action: 'booking.create', label: 'Make bookings', hint: 'Book a vehicle in and pick a time.', group: 'Planning' },
-  { action: 'booking.move', label: 'Move bookings', hint: 'Drag a booking to another time or technician.', group: 'Planning' },
+  { action: 'booking.move', label: 'Move bookings', hint: 'Drag a booking to another time or mechanic.', group: 'Planning' },
   { action: 'booking.override-conflict', label: 'Override a double booking warning', hint: 'Book over a clash after being warned.', group: 'Planning' },
   { action: 'board.move', label: 'Move jobs on the workshop board', hint: 'Change a job between stages.', group: 'Jobs and quotes' },
   { action: 'quote.manage', label: 'Send and manage quotes', hint: 'Price additional work and record approval.', group: 'Jobs and quotes' },

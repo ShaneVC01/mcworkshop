@@ -103,7 +103,7 @@ function TodayPage() {
               </section>
 
               <section>
-                <h2 className="mb-3 text-xl">Technicians</h2>
+                <h2 className="mb-3 text-xl">Mechanics</h2>
                 <Card className="divide-y">
                   {data.capacity.byTechnician.map((c) => {
                     const tech = data.idleTechnicians.find((t) => t.id === c.technicianId)

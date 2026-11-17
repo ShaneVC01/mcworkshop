@@ -51,12 +51,12 @@ function ReportsPage() {
               </section>
 
               <section>
-                <h2 className="mb-3 text-xl">By technician</h2>
+                <h2 className="mb-3 text-xl">By mechanic</h2>
                 <Card className="overflow-x-auto">
                   <table className="tabular w-full min-w-[34rem] text-left">
                     <thead>
                       <tr className="border-b text-sm text-muted-foreground">
-                        <th className="p-3 font-normal">Technician</th>
+                        <th className="p-3 font-normal">Mechanic</th>
                         <th className="p-3 text-right font-normal">Available</th>
                         <th className="p-3 text-right font-normal">Booked</th>
                         <th className="p-3 text-right font-normal">Clocked</th>

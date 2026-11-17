@@ -58,7 +58,7 @@ function HoursAndTargets({ settings }: { settings: WorkshopSettings }) {
   return (
     <Section
       title="Hours and targets"
-      hint="New technicians start with these hours. The daily target is the billable time each technician should book. The workshop target on Today adds them up."
+      hint="New mechanics start with these hours. The daily target is the billable time each mechanic should book. The workshop target on Today adds them up."
     >
       <form
         className="grid gap-4 @lg:grid-cols-2 @3xl:grid-cols-3"
@@ -77,7 +77,7 @@ function HoursAndTargets({ settings }: { settings: WorkshopSettings }) {
         <Field label="Break, minutes" hint={`${formatHours(shiftHours)} of working time a day.`}>
           <NumberInput label="Break in minutes" digits={0} value={form.breakMinutes} onChange={(v) => setForm({ ...form, breakMinutes: v ?? 0 })} />
         </Field>
-        <Field label="Daily target, hours per technician" hint={`About ${formatHours(form.dailyTargetHours * working)} a day across ${working} technicians.`}>
+        <Field label="Daily target, hours per mechanic" hint={`About ${formatHours(form.dailyTargetHours * working)} a day across ${working} mechanics.`}>
           <NumberInput label="Daily target in hours" value={form.dailyTargetHours} onChange={(v) => setForm({ ...form, dailyTargetHours: v ?? 0 })} />
         </Field>
         <Field label="Labour rate per hour, excluding GST" hint={`${formatMoney(form.labourRateCents + gstOf(form.labourRateCents))} including GST. Used for new bookings and quotes. Jobs already booked keep their rate.`}>
@@ -194,7 +194,7 @@ function ClosedDays({ settings }: { settings: WorkshopSettings }) {
   return (
     <Section
       title="Closed days"
-      hint="Public holidays and shutdowns. Weekends are always closed. Technicians show no capacity on a closed day and bookings skip it."
+      hint="Public holidays and shutdowns. Weekends are always closed. Mechanics show no capacity on a closed day and bookings skip it."
     >
       <form
         className="mb-4 grid gap-3 @lg:grid-cols-[12rem_minmax(0,1fr)_auto] @lg:items-end"
