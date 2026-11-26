@@ -62,7 +62,7 @@ Vite, React, TypeScript, Tailwind v4, shadcn/ui, TanStack Router (file based, `s
 7. Keep these current in every slice:
    - `docs/netsuite-mapping.md`: each domain entity, its likely NetSuite record, fields, and whether it is read, write or both.
    - `docs/supabase-handover.md`: every data function with its intended query, RLS needs and whether it becomes a view, RPC or Edge Function.
-8. Every job state change writes an immutable activity event. Job states are the 12 explicit states in the PRD.
+8. Every job state change writes an immutable activity event. Job states are the 12 explicit states in the PRD plus Ready to invoice. A finished job is checked by the workshop manager (Ready to invoice), invoiced in the back office (Invoiced, ready to collect) and then paid (Paid, the final state).
 9. Invoices are a read only summary. The app never creates or edits invoices.
 
 ## Edge Functions (NetSuite backed API endpoints)

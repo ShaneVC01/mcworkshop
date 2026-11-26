@@ -35,11 +35,11 @@ function Flag({ icon: Icon, colour, children }: { icon: typeof Clock; colour: st
 }
 
 /** Warnings a controller needs to spot without opening the job. */
-export function JobFlags({ s }: { s: ScheduledJob }) {
+export function JobFlags({ s, hideUnassigned = false }: { s: ScheduledJob; hideUnassigned?: boolean }) {
   const { job, booking } = s
   const flags: ReactNode[] = []
   if (s.atRisk) flags.push(<Flag key="risk" icon={TriangleAlert} colour="var(--status-blocked)">Past promised time</Flag>)
-  if (booking.technicianIds.length === 0) flags.push(<Flag key="un" icon={UserRoundX} colour="var(--status-blocked)">Unassigned</Flag>)
+  if (booking.technicianIds.length === 0 && !hideUnassigned && !['BOOKED', 'CONFIRMED'].includes(s.job.status)) flags.push(<Flag key="un" icon={UserRoundX} colour="var(--status-blocked)">Unassigned</Flag>)
   if (needsApproval(job) && job.status !== 'WAITING_APPROVAL') {
     flags.push(<Flag key="appr" icon={ClockAlert} colour="var(--status-approval)">Extra work needs approval</Flag>)
   }

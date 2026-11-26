@@ -14,8 +14,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.png', 'apple-touch-icon.png', 'logo-mccormacks.png', 'logo-4wd.png'],
       manifest: {
-        name: 'McCormacks 4WD Workshop',
-        short_name: 'Workshop',
+        name: 'McCormacks Connect',
+        short_name: 'Connect',
         description: 'Bookings, workshop planning and job cards for McCormacks 4WD.',
         lang: 'en-AU',
         start_url: '/',

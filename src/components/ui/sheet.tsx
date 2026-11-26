@@ -19,7 +19,8 @@ export function Sheet({
   title: ReactNode
   children: ReactNode
   footer?: ReactNode
-  wide?: boolean
+  /** `xl` is for timelines, such as assigning a vehicle across all mechanics. */
+  wide?: boolean | 'xl'
 }) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -48,7 +49,7 @@ export function Sheet({
         tabIndex={-1}
         className={cn(
           'pb-safe relative flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-background shadow-card outline-none sm:max-h-none sm:rounded-none sm:border-l',
-          wide ? 'sm:max-w-xl' : 'sm:max-w-md',
+          wide === 'xl' ? 'sm:max-w-5xl' : wide ? 'sm:max-w-xl' : 'sm:max-w-md',
         )}
       >
         <div className="flex items-start justify-between gap-3 border-b px-4 py-3">

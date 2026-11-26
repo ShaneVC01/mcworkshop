@@ -6,6 +6,7 @@ import { RegoPlate } from '@/components/domain/rego-plate'
 import { OfflineBanner } from '@/components/states'
 import { useLiveData, useSearch } from '@/data/hooks'
 import { cn } from '@/lib/utils'
+import { BrandMark } from './brand-mark'
 import { InstallPrompt } from './install-prompt'
 import { useTheme } from './theme'
 
@@ -25,9 +26,9 @@ export function AppShell({ nav, showSearch = true }: { nav: NavItem[]; showSearc
   return (
     <div className="flex h-dvh flex-col bg-background sm:flex-row">
       <aside className="hidden w-[5.5rem] shrink-0 flex-col bg-chrome text-chrome-foreground sm:flex lg:w-60">
-        <div className="flex h-16 items-center justify-center px-3 lg:justify-start lg:px-5">
-          <img src="/logo-4wd.png" alt="McCormacks 4WD" className="h-6 w-auto lg:hidden" />
-          <img src="/logo-mccormacks.png" alt="McCormacks 4WD" className="hidden h-8 w-auto lg:block" />
+        <div className="flex h-16 items-center justify-center px-3 lg:h-20 lg:justify-start lg:px-5">
+          <BrandMark variant="compact" className="lg:hidden" />
+          <BrandMark className="hidden text-[18px] lg:flex" />
         </div>
         <nav aria-label="Main" className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-2 lg:px-3">
           {nav.map((item) => (
@@ -52,7 +53,7 @@ export function AppShell({ nav, showSearch = true }: { nav: NavItem[]; showSearc
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="pt-safe z-20 shrink-0 bg-chrome text-chrome-foreground sm:border-b sm:bg-background sm:text-foreground">
           <div className="flex h-14 items-center gap-2 px-3 sm:h-16 sm:px-5">
-            <img src="/logo-mccormacks.png" alt="McCormacks 4WD" className="h-6 w-auto sm:hidden" />
+            <BrandMark className="shrink-0 text-[15px] sm:hidden" />
             {showSearch ? <GlobalSearch /> : <div className="flex-1" />}
             <div className="lg:hidden">
               <UserMenu placement="bottom" />

@@ -5,15 +5,12 @@
  */
 import { ADMIN_ONLY, defaultRolePermissions } from '@/auth/default-permissions'
 import { getSession } from '@/auth/session'
-import { findConflicts, freeBay } from '@/lib/capacity'
-import { addMinutes, dayKey, formatDayShort, formatTime, minutesBetween, minutesOfDay, normaliseRego } from '@/lib/format'
-import { canTransition, isFinished, JOB_STATUS_LABEL } from '@/lib/job-state'
+import { dayAvailability, endAtFor, findConflicts, freeBay, startOutsideBreaks, workshopRules } from '@/lib/capacity'
+import { addMinutes, addWorkingDays, at, dayKey, formatDayShort, formatHours, formatTime, fromMinutes, minutesBetween, minutesOfDay, normaliseRego, nowIso } from '@/lib/format'
+import { JOB_STATUS_LABEL, canTransition, closeOutChecks, isFinished } from '@/lib/job-state'
+import { partsLeadTime, priceItemLines } from '@/lib/item-lines'
 import { resolveServicePlan } from '@/lib/service-profiles'
-import type {
-  Action, Bay, Booking, ChecklistItem, ChecklistTemplateItem, ClosedDay, Customer, Finding, FindingSeverity, Id, JobCard,
-  JobStatus, QuoteLine, RegoState, Result, Role, ServiceProfile, ServiceTemplate, Skill, StaffUser, TemplatePart,
-  Vehicle, VehicleModel, WorkshopSettings,
-} from '@/types'
+import type { Action, Bay, Booking, BookingExtra, BookingItem, BookingType, ChecklistItem, ChecklistTemplateItem, ClosedDay, Customer, Finding, FindingSeverity, Id, JobCard, JobStatus, PartOrder, QuoteLine, RegoState, Result, Role, ServiceProfile, ServiceTemplate, Skill, StaffUser, TemplatePart, Vehicle, VehicleModel, WorkshopSettings } from '@/types'
 import { buildJobParts, type Database } from './mock/seed'
 import {
   DataError, resetDemoData, retryOutboxEntry, setSimulateErrors, write, writeConfig, type WriteContext,
@@ -56,10 +53,38 @@ function assertNoConflict(db: Database, proposal: Parameters<typeof findConflict
 
 // ---- Customers and vehicles -----------------------------------------------------------------
 
-export const createCustomer = (input: { name: string; mobile: string; email?: string; postcode?: string }): Promise<Result<Customer>> =>
+type CustomerInput = { name: string; mobile: string; email?: string; address?: string; postcode?: string }
+
+const digitsOf = (s: string) => s.replace(/\D/g, '')
+
+/** One customer per mobile and per email, so the back office never gets two records for one person. */
+function assertNotDuplicate(db: Database, input: Partial<CustomerInput>, ignoreId?: Id) {
+  const others = db.customers.filter((c) => c.id !== ignoreId)
+  const mobile = digitsOf(input.mobile ?? '')
+  const sameMobile = mobile && others.find((c) => digitsOf(c.mobile) === mobile)
+  if (sameMobile) throw new DataError(`${input.mobile} already belongs to ${sameMobile.name}. Use that customer instead.`)
+  const email = input.email?.trim().toLowerCase()
+  const sameEmail = email && others.find((c) => c.email?.toLowerCase() === email)
+  if (sameEmail) throw new DataError(`${input.email} already belongs to ${sameEmail.name}. Use that customer instead.`)
+}
+
+export const createCustomer = (input: CustomerInput): Promise<Result<Customer>> =>
   write('customer.create', `New customer ${input.name}`, (c) => c.id, (ctx) => {
+    assertNotDuplicate(ctx.db, input)
     const customer: Customer = { id: `c${ctx.id()}`, ...input, sync: pending }
     ctx.db.customers.push(customer)
+    return customer
+  })
+
+/** Quick edits from the booking screen: mobile, email and address. */
+export const updateCustomer = (customerId: Id, patch: Partial<CustomerInput>): Promise<Result<Customer>> =>
+  write('customer.update', 'Customer details updated', customerId, (ctx) => {
+    const customer = ctx.db.customers.find((c) => c.id === customerId)
+    if (!customer) throw new DataError('That customer could not be found.')
+    if (patch.name !== undefined && !patch.name.trim()) throw new DataError('The customer needs a name.')
+    if (patch.mobile !== undefined && digitsOf(patch.mobile).length < 8) throw new DataError('Enter a full mobile number.')
+    assertNotDuplicate(ctx.db, patch, customerId)
+    Object.assign(customer, patch, { sync: pending })
     return customer
   })
 
@@ -80,12 +105,20 @@ export const createVehicle = (input: {
 
 export interface CreateBookingInput {
   vehicleId: Id
-  serviceTemplateId: Id
+  /** Catalogue services, first one leads. `label` replaces the service name, for example "150,000 km service". */
+  services: { templateId: Id; label?: string }[]
+  /** Work that is not a catalogue service, for example a quote the customer declined last time. */
+  extras?: BookingExtra[]
+  /** One off parts, labour and charges from the items list. Labour quantities are hours. */
+  items?: BookingItem[]
+  /** Service is the default. Repair only jobs do not get service reminders. */
+  bookingType?: BookingType
   customerConcern: string
+  /** Drop off time. The workshop assigns a mechanic and bay when the vehicle arrives. */
   startAt: string
-  technicianId?: Id
-  bayId?: Id
   tentative?: boolean
+  /** The reading given at booking. Saved to the vehicle when it is higher than the one on file. */
+  odometerKm?: number
   /** Only controllers, managers and administrators may override a double booking warning. */
   override?: boolean
 }
@@ -93,36 +126,93 @@ export interface CreateBookingInput {
 export const createBooking = (input: CreateBookingInput): Promise<Result<Booking>> =>
   write('booking.create', 'New booking', (b) => b.id, (ctx) => {
     const { db } = ctx
-    const base = db.templates.find((t) => t.id === input.serviceTemplateId)
     const vehicle = db.vehicles.find((v) => v.id === input.vehicleId)
-    if (!base || !vehicle) throw new DataError('Choose a vehicle and a service first.')
+    const chosen = input.services
+      .map((s) => ({ ...s, base: db.templates.find((t) => t.id === s.templateId) }))
+      .filter((s): s is typeof s & { base: ServiceTemplate } => Boolean(s.base))
+    const extras = input.extras ?? []
+    const lines = priceItemLines(input.items ?? [], db.items)
+    if (!vehicle || (!chosen.length && !extras.length && !lines.priced.length)) throw new DataError('Choose a vehicle and the work first.')
+    const rate = db.settings.labourRateCents
     // The vehicle's own profile wins over the generic template when there is one.
-    const plan = resolveServicePlan(base, vehicle, db.library, db.profiles, db.settings.labourRateCents)
-    const template = plan.template
-    const endAt = addMinutes(input.startAt, template.labourHours * 60)
-    const technicianIds = input.technicianId ? [input.technicianId] : []
-    const span: [number, number] = [minutesOfDay(input.startAt), minutesOfDay(endAt)]
-    const bayId = input.bayId ?? (technicianIds.length ? freeBay(db.bays, db.bookings, dayKey(input.startAt), span, template.bayType)?.id : undefined)
-    assertNoConflict(db, { startAt: input.startAt, endAt, technicianIds, bayId }, input.override)
+    const plans = chosen.map((s) => ({ ...s, plan: resolveServicePlan(s.base, vehicle, db.library, db.profiles, rate) }))
+    // Fitting labour and charges are part of something else, so they do not name the booking.
+    const itemNames = lines.priced.filter((p) => !p.line.forItemId && p.item.kind !== 'charge').map((p) => p.item.name)
+    const allNames = [...plans.map((p) => p.label ?? p.plan.template.name), ...extras.map((e) => e.description), ...itemNames]
+    const names = allNames.length > 3 ? [...allNames.slice(0, 3), `plus ${allNames.length - 3} more`] : allNames
+    const hours = plans.reduce((s, p) => s + p.plan.template.labourHours, 0) + extras.reduce((s, e) => s + e.labourHours, 0) + lines.labourHours
 
+    const endAt = addMinutes(input.startAt, hours * 60)
+    const technicianIds: Id[] = []
+    const bayId = undefined
+    const day = dayKey(input.startAt)
+    // Ordered in parts must be here first. This cannot be overridden.
+    const { orderedParts, partsReadyDay } = partsLeadTime(input.items ?? [], db.items)
+    if (partsReadyDay && day < partsReadyDay) {
+      throw new DataError(`${orderedParts[0]!.name} takes ${orderedParts[0]!.leadTimeDays} working days to arrive. Book on or after ${formatDayShort(partsReadyDay)}.`)
+    }
+    // Booked on the whole workshop's hours. The day must have room unless someone allowed to overrides it.
+    const room = dayAvailability({ labourHours: hours, fromDay: day }, day, db.technicians, db.bookings)
+    if (room.status === 'closed' || room.status === 'past') throw new DataError('The workshop is not taking bookings that day.')
+    if (room.freeHours + 1e-6 < hours && !input.override) {
+      throw new DataError(`${formatDayShort(day)} is full: ${formatHours(Math.max(0, room.freeHours))} free and this work needs ${formatHours(hours)}.`)
+    }
+
+    if (input.odometerKm && input.odometerKm > (vehicle.odometerKm ?? 0)) {
+      vehicle.odometerKm = input.odometerKm
+      vehicle.sync = pending
+    }
+
+    const parts = plans.map((p) => buildJobParts({ ...p.plan.template, name: p.label ?? p.plan.template.name }, ctx.id, rate))
     const n = ++db.counters.booking
+    const serviceName = names.join(', ')
     const job: JobCard = {
-      id: `j${n}`, number: `J-${n}`, division: template.division, bookingId: `b${n}`,
+      id: `j${n}`, number: `J-${n}`, division: plans[0]?.plan.template.division ?? 'servicing', bookingId: `b${n}`,
       vehicleId: vehicle.id, customerId: vehicle.customerId, status: input.tentative ? 'BOOKED' : 'CONFIRMED',
-      customerConcern: input.customerConcern.trim() || `${template.name} as booked.`,
-      ...buildJobParts(template, ctx.id, db.settings.labourRateCents), findings: [], quoteLines: [], timeEntries: [], notes: [],
+      customerConcern: input.customerConcern.trim() || `${serviceName} as booked.`,
+      labour: [
+        ...parts.flatMap((p) => p.labour),
+        ...extras.map((e) => ({ id: ctx.id(), description: e.description, hours: e.labourHours, rateCents: rate, source: 'template' as const, done: false })),
+        // Labour from the items list keeps its own rate, as it does on the back office.
+        ...lines.priced.filter((p) => p.item.kind === 'labour').map((p) => {
+          const forPart = p.line.forItemId ? db.items.find((i) => i.id === p.line.forItemId) : undefined
+          const description = forPart && !p.item.standardHours ? `Fit ${forPart.name.charAt(0).toLowerCase()}${forPart.name.slice(1)}` : p.item.name
+          return { id: ctx.id(), description, hours: p.line.qty, rateCents: p.item.unitCents, source: 'template' as const, itemId: p.item.id, done: false }
+        }),
+      ],
+      parts: [
+        ...parts.flatMap((p) => p.parts),
+        ...extras.filter((e) => e.partsCents).map((e) => ({
+          id: ctx.id(), name: `Parts for ${e.description.toLowerCase()}`, qty: 1, unitCents: e.partsCents, source: 'template' as const, used: false,
+        })),
+        ...lines.priced.filter((p) => p.item.kind !== 'labour').map((p) => ({
+          id: ctx.id(), name: `${p.item.name} (${p.item.code})`, qty: p.line.qty, unitCents: p.item.unitCents, source: 'template' as const, itemId: p.item.id, used: false,
+        })),
+      ],
+      checklist: parts.flatMap((p) => p.checklist),
+      findings: [], quoteLines: [], timeEntries: [], notes: [],
       promisedAt: addMinutes(endAt, 60), sync: pending,
     }
     const booking: Booking = {
-      id: `b${n}`, number: `B-${n}`, division: template.division, jobId: job.id, vehicleId: vehicle.id,
+      id: `b${n}`, number: `B-${n}`, division: job.division, jobId: job.id, vehicleId: vehicle.id,
       customerId: vehicle.customerId, technicianIds, bayId, startAt: input.startAt, endAt,
-      estimatedLabourHours: template.labourHours, serviceTemplateId: base.id, serviceName: template.name,
-      tentative: Boolean(input.tentative), readiness: template.parts.length ? 'ready' : 'unknown', sync: pending,
+      estimatedLabourHours: hours, serviceTemplateId: chosen[0]?.base.id, serviceName, bookingType: input.bookingType ?? 'service',
+      tentative: Boolean(input.tentative), readiness: job.parts.length ? 'ready' : 'unknown', sync: pending,
     }
     db.jobs.push(job)
     db.bookings.push(booking)
-    ctx.log(job.id, 'booking.created', `Booked ${template.name} for ${formatDayShort(dayKey(booking.startAt))} at ${formatTime(booking.startAt)}`, {
-      registration: vehicle.registration, source: plan.source,
+    // Specialist parts get an order to place, due back by the booking day.
+    for (const p of lines.priced.filter((x) => x.item.kind === 'part' && x.item.stocked === false && x.item.leadTimeDays)) {
+      db.partOrders.push({
+        id: ctx.id(), jobId: job.id, bookingId: booking.id, itemId: p.item.id, code: p.item.code, name: p.item.name, qty: p.line.qty,
+        leadTimeDays: p.item.leadTimeDays!, status: 'to-order', orderBy: addWorkingDays(day, -p.item.leadTimeDays!), neededBy: day, sync: pending,
+      })
+    }
+    ctx.log(job.id, 'booking.created', `Booked ${serviceName} for ${formatDayShort(dayKey(booking.startAt))} at ${formatTime(booking.startAt)}`, {
+      registration: vehicle.registration, source: plans.some((p) => p.plan.source === 'profile') ? 'profile' : 'generic',
+      bookingType: booking.bookingType,
+      fromEarlierQuotes: extras.map((e) => e.sourceId).filter(Boolean),
+      items: lines.priced.map((p) => ({ code: p.item.code, qty: p.line.qty })),
     })
     return booking
   })
@@ -188,20 +278,55 @@ export const cancelBooking = (bookingId: Id): Promise<Result<{ id: Id }>> =>
 
 // ---- Job flow -----------------------------------------------------------------------------------
 
+/** "Vehicle arrived": the vehicle is on site and waits for the workshop controller to assign it. */
 export const checkInVehicle = (jobId: Id, odometerKm?: number): Promise<Result<JobCard>> =>
-  write('job.check-in', 'Vehicle checked in', jobId, (ctx) => {
+  write('job.check-in', 'Vehicle arrived', jobId, (ctx) => {
     const job = jobOf(ctx.db, jobId)
     setStatus(ctx, job, 'CHECKED_IN')
     const vehicle = ctx.db.vehicles.find((v) => v.id === job.vehicleId)
     if (vehicle && odometerKm) vehicle.odometerKm = odometerKm
     bookingFor(ctx.db, jobId).tentative = false
-    ctx.log(job.id, 'vehicle.checked_in', `Checked in ${vehicle?.registration ?? ''}`, { odometerKm })
+    ctx.log(job.id, 'vehicle.checked_in', `${vehicle?.registration ?? 'Vehicle'} arrived`, { odometerKm })
     return job
+  })
+
+/**
+ * Gives an arrived vehicle to a mechanic at a time on their day, usually their next free slot.
+ * Also used to reassign. Hard clashes (leave, sick) always stop it. Soft ones (overlap, past the shift)
+ * need `override`, which only controllers, managers and administrators are offered.
+ */
+export const assignMechanic = (jobId: Id, technicianId: Id, startAt: string, override?: boolean): Promise<Result<Booking>> =>
+  write('job.assign', 'Mechanic assigned', jobId, (ctx) => {
+    const { db } = ctx
+    const booking = bookingFor(db, jobId)
+    const job = jobOf(db, booking.jobId)
+    if (!['CHECKED_IN', 'READY_FOR_WORK'].includes(job.status)) {
+      throw new DataError(`Only an arrived vehicle can be assigned. This one is ${JOB_STATUS_LABEL[job.status].toLowerCase()}.`)
+    }
+    const tech = db.technicians.find((t) => t.id === technicianId && t.active)
+    if (!tech) throw new DataError('That mechanic could not be found.')
+    const endAt = endAtFor(startAt, booking.estimatedLabourHours)
+    const template = db.templates.find((t) => t.id === booking.serviceTemplateId)
+    const span: [number, number] = [minutesOfDay(startAt), minutesOfDay(endAt)]
+    const bayId = freeBay(db.bays, db.bookings, dayKey(startAt), span, template?.bayType, booking.id)?.id ?? booking.bayId
+    assertNoConflict(db, { id: booking.id, startAt, endAt, technicianIds: [tech.id], bayId }, override)
+
+    const reassigned = job.status === 'READY_FOR_WORK'
+    Object.assign(booking, { technicianIds: [tech.id], startAt, endAt, bayId, sync: pending })
+    job.promisedAt = addMinutes(endAt, 60)
+    setStatus(ctx, job, 'READY_FOR_WORK')
+    ctx.log(job.id, 'technician.assigned', `${reassigned ? 'Reassigned' : 'Assigned'} to ${tech.name}, ${formatDayShort(dayKey(startAt))} ${formatTime(startAt)} to ${formatTime(endAt)}`, {
+      technicianIds: [tech.id], startAt, override: Boolean(override),
+    })
+    return booking
   })
 
 export const moveJobStatus = (jobId: Id, status: JobStatus, detail?: { reason?: string; partsEta?: string }): Promise<Result<JobCard>> =>
   write('job.status', `Status: ${JOB_STATUS_LABEL[status]}`, jobId, (ctx) => {
     const job = jobOf(ctx.db, jobId)
+    if (status === 'READY_FOR_WORK' && job.status === 'CHECKED_IN') {
+      throw new DataError('Use Assign to give the vehicle to a mechanic.')
+    }
     // Keep time honest: holding a job stops the clock.
     if (status !== 'IN_PROGRESS') closeOpenEntry(ctx, job)
     setStatus(ctx, job, status)
@@ -232,10 +357,19 @@ export const startJob = (jobId: Id): Promise<Result<JobCard>> =>
   write('job.start', 'Job started', jobId, (ctx) => {
     const job = jobOf(ctx.db, jobId)
     if (isFinished(job.status)) throw new DataError('This job is already complete.')
-    // One tap start: an arriving vehicle is checked in on the way through.
+    const booking = bookingFor(ctx.db, jobId)
+    // One tap start: a mechanic who grabs a vehicle before it is assigned records the arrival and
+    // takes the job on the way through, so the trail still shows each step.
     if (['BOOKED', 'CONFIRMED'].includes(job.status)) setStatus(ctx, job, 'CHECKED_IN')
+    if (job.status === 'CHECKED_IN') {
+      const techId = technicianIdFor(ctx.db, job)
+      if (!booking.technicianIds.includes(techId)) booking.technicianIds = [techId]
+      setStatus(ctx, job, 'READY_FOR_WORK')
+      const name = ctx.db.technicians.find((t) => t.id === techId)?.name ?? ctx.actor.name
+      ctx.log(job.id, 'technician.assigned', `Taken by ${name} when starting`, { technicianIds: booking.technicianIds })
+    }
     setStatus(ctx, job, 'IN_PROGRESS')
-    bookingFor(ctx.db, jobId).tentative = false
+    booking.tentative = false
     if (!job.timeEntries.some((t) => !t.endedAt)) {
       job.timeEntries.push({ id: ctx.id(), technicianId: technicianIdFor(ctx.db, job), startedAt: ctx.now })
     }
@@ -537,10 +671,20 @@ export const resetRolePermissions = (role: Role): Promise<Result<Action[]>> =>
 // ---- Admin: workshop hours, bays and closed days -----------------------------------------------------
 
 export const saveWorkshopSettings = (
-  patch: Partial<Pick<WorkshopSettings, 'openTime' | 'closeTime' | 'breakMinutes' | 'dailyTargetHours' | 'labourRateCents'>>,
+  patch: Partial<Pick<WorkshopSettings, 'openTime' | 'closeTime' | 'breaks' | 'gapMinutes' | 'dailyTargetHours' | 'labourRateCents'>>,
 ): Promise<Result<WorkshopSettings>> =>
   writeConfig(({ db }) => {
     const next = { ...db.settings, ...patch }
+    const breaks = [...next.breaks].sort((a, b) => a.from.localeCompare(b.from))
+    breaks.forEach((b, i) => {
+      if (!isTime(b.from) || !isTime(b.to)) throw new DataError('Enter break times like 11:30.')
+      if (minutesOf(b.to) <= minutesOf(b.from)) throw new DataError('Each break must end after it starts.')
+      if (minutesOf(b.from) < minutesOf(next.openTime) || minutesOf(b.to) > minutesOf(next.closeTime)) throw new DataError('Breaks must sit inside opening hours.')
+      if (i && minutesOf(b.from) < minutesOf(breaks[i - 1]!.to)) throw new DataError('Breaks cannot overlap.')
+    })
+    if (!Number.isInteger(next.gapMinutes) || next.gapMinutes < 0 || next.gapMinutes > 60) throw new DataError('The gap between vehicles must be 0 to 60 minutes.')
+    next.breaks = breaks
+    next.breakMinutes = breaks.reduce((s, b) => s + minutesOf(b.to) - minutesOf(b.from), 0)
     checkHours(next.openTime, next.closeTime, next.breakMinutes)
     const shiftHours = (minutesOf(next.closeTime) - minutesOf(next.openTime) - next.breakMinutes) / 60
     if (!(next.dailyTargetHours >= 0) || next.dailyTargetHours > shiftHours) {
@@ -694,4 +838,160 @@ export const removeServiceProfile = (profileId: Id): Promise<Result<Id>> =>
   writeConfig(({ db }) => {
     db.profiles = db.profiles.filter((p) => p.id !== profileId)
     return profileId
+  })
+
+// ---- Specialist parts ------------------------------------------------------------------------------
+
+function partOrderOf(db: Database, id: Id) {
+  const order = db.partOrders.find((o) => o.id === id)
+  if (!order) throw new DataError('That part order no longer exists.')
+  return order
+}
+
+const etaNote = (order: PartOrder) =>
+  order.eta && order.eta > order.neededBy ? ` That is after the booking on ${formatDayShort(order.neededBy)}, so tell the customer.` : ''
+
+/** The part has been ordered. The ETA can come now or later. */
+export const markPartOrdered = (id: Id, input: { supplier: string; eta?: string }): Promise<Result<PartOrder>> =>
+  write('parts.manage', 'Part ordered', id, (ctx) => {
+    const order = partOrderOf(ctx.db, id)
+    if (!input.supplier.trim()) throw new DataError('Say who it was ordered from.')
+    Object.assign(order, { status: 'ordered', supplier: input.supplier.trim(), eta: input.eta || undefined, orderedAt: nowIso(), wrongPartAt: undefined, sync: pending })
+    ctx.log(order.jobId, 'parts.ordered', `${order.name} (${order.code}) ordered from ${order.supplier}${order.eta ? `, due ${formatDayShort(order.eta)}` : ''}.${etaNote(order)}`, { orderId: id, eta: order.eta })
+    return order
+  })
+
+/** The supplier gave a new date. */
+export const setPartEta = (id: Id, eta: string): Promise<Result<PartOrder>> =>
+  write('parts.manage', 'Part ETA updated', id, (ctx) => {
+    const order = partOrderOf(ctx.db, id)
+    if (!eta) throw new DataError('Pick the day it is due.')
+    order.eta = eta
+    order.sync = pending
+    ctx.log(order.jobId, 'parts.eta', `${order.name} (${order.code}) now due ${formatDayShort(eta)}.${etaNote(order)}`, { orderId: id, eta })
+    return order
+  })
+
+/** Checked in. A wrong part goes back to be ordered again. */
+export const receivePart = (id: Id, correct: boolean, note?: string): Promise<Result<PartOrder>> =>
+  write('parts.manage', correct ? 'Part received' : 'Wrong part received', id, (ctx) => {
+    const order = partOrderOf(ctx.db, id)
+    if (correct) {
+      Object.assign(order, { status: 'received', receivedAt: nowIso(), note: note?.trim() || order.note, sync: pending })
+      ctx.log(order.jobId, 'parts.received', `${order.name} (${order.code}) received and checked.`, { orderId: id })
+    } else {
+      Object.assign(order, { status: 'to-order', wrongPartAt: nowIso(), eta: undefined, note: note?.trim() || undefined, sync: pending })
+      ctx.log(order.jobId, 'parts.wrong', `Wrong part delivered for ${order.name} (${order.code}). To be ordered again.${note ? ` ${note.trim()}` : ''}`, { orderId: id })
+    }
+    return order
+  })
+
+/** The customer said they are still bringing the vehicle in, by reply or on the phone. */
+export const recordCustomerConfirmed = (bookingId: Id, how: 'phone' | 'reply' = 'phone'): Promise<Result<Booking>> =>
+  write('booking.create', 'Customer confirmed', bookingId, (ctx) => {
+    const booking = ctx.db.bookings.find((b) => b.id === bookingId)
+    if (!booking) throw new DataError('That booking no longer exists.')
+    booking.customerConfirmedAt = nowIso()
+    booking.tentative = false
+    booking.sync = pending
+    ctx.log(booking.jobId, 'booking.customer-confirmed', how === 'phone' ? 'Customer confirmed on the phone' : 'Customer confirmed by reply', { how })
+    return booking
+  })
+
+// ---- Workshop day: place a vehicle on a mechanic's day -----------------------------------------------
+
+const NOT_STARTED: JobStatus[] = ['BOOKED', 'CONFIRMED', 'CHECKED_IN', 'READY_FOR_WORK']
+const snapUp = (m: number) => Math.ceil(m / 15) * 15
+
+/**
+ * Puts a vehicle on a mechanic's day at a 15 minute mark. It keeps the gap after the vehicle before it,
+ * never starts in a break, and pushes the vehicles after it to the right so each keeps the gap too.
+ * Work already started is never moved.
+ */
+export const placeOnMechanic = (bookingId: Id, technicianId: Id, startAt: string): Promise<Result<{ booking: Booking; moved: number }>> =>
+  write('job.assign', 'Moved on the workshop day', bookingId, (ctx) => {
+    const { db } = ctx
+    const booking = db.bookings.find((b) => b.id === bookingId)
+    if (!booking) throw new DataError('That booking no longer exists.')
+    const job = jobOf(db, booking.jobId)
+    if (!NOT_STARTED.includes(job.status)) throw new DataError('Work has started on this vehicle, so it stays where it is.')
+    const tech = db.technicians.find((t) => t.id === technicianId && t.active)
+    if (!tech) throw new DataError('That mechanic could not be found.')
+    const day = dayKey(startAt)
+    const { gapMinutes } = workshopRules()
+    const lane = db.bookings
+      .filter((b) => b.id !== booking.id && b.technicianIds.includes(tech.id) && dayKey(b.startAt) === day)
+      .sort((a, b) => a.startAt.localeCompare(b.startAt))
+
+    let start = snapUp(startOutsideBreaks(minutesOfDay(startAt)))
+    const dropped = start
+    const before = lane.filter((b) => minutesOfDay(b.startAt) <= dropped)
+    const prev = before.at(-1)
+    if (prev && minutesOfDay(prev.endAt) + gapMinutes > start) start = snapUp(startOutsideBreaks(minutesOfDay(prev.endAt) + gapMinutes))
+    const newStart = at(day, fromMinutes(start))
+    const endAt = endAtFor(newStart, booking.estimatedLabourHours)
+    const changedTech = booking.technicianIds[0] !== tech.id
+    Object.assign(booking, { technicianIds: [tech.id], startAt: newStart, endAt, sync: pending })
+    job.promisedAt = addMinutes(endAt, 60)
+    if (job.status === 'CHECKED_IN') setStatus(ctx, job, 'READY_FOR_WORK')
+    ctx.log(job.id, changedTech ? 'technician.assigned' : 'booking.rescheduled', `Planned with ${tech.name}, ${formatTime(newStart)} to ${formatTime(endAt)}`, {
+      technicianIds: [tech.id], startAt: newStart,
+    })
+
+    // Everything after it moves right, keeping the gap. Work already started stays put.
+    let cursor = minutesOfDay(endAt)
+    let moved = 0
+    for (const b of lane.filter((x) => !before.includes(x))) {
+      const s = minutesOfDay(b.startAt)
+      if (s < cursor + gapMinutes && NOT_STARTED.includes(jobOf(db, b.jobId).status)) {
+        const shifted = at(day, fromMinutes(snapUp(startOutsideBreaks(cursor + gapMinutes))))
+        const shiftedEnd = endAtFor(shifted, b.estimatedLabourHours)
+        Object.assign(b, { startAt: shifted, endAt: shiftedEnd, sync: pending })
+        jobOf(db, b.jobId).promisedAt = addMinutes(shiftedEnd, 60)
+        ctx.log(b.jobId, 'booking.rescheduled', `Moved to ${formatTime(shifted)} to make room for ${regoOf(db, booking.vehicleId)}`, { startAt: shifted })
+        moved++
+      }
+      cursor = Math.max(cursor, minutesOfDay(b.endAt))
+    }
+    return { booking, moved }
+  })
+
+// ---- Close out: check, invoice, paid --------------------------------------------------------------
+
+/** The workshop manager checks a finished job and releases it for invoicing. */
+export const verifyJob = (jobId: Id): Promise<Result<JobCard>> =>
+  write('job.verify', 'Checked, ready to invoice', jobId, (ctx) => {
+    const job = jobOf(ctx.db, jobId)
+    if (!['TECH_COMPLETE', 'QUALITY_CHECK'].includes(job.status)) throw new DataError('Only work the mechanic has finished can be checked.')
+    const failed = closeOutChecks(job).filter((c) => !c.ok)
+    if (failed.length) throw new DataError(`Not ready to invoice: ${failed.map((c) => c.label.charAt(0).toLowerCase() + c.label.slice(1)).join('; ')}.`)
+    const me = getSession()
+    job.verifiedAt = nowIso()
+    job.verifiedBy = me?.name
+    job.sync = pending
+    setStatus(ctx, job, 'READY_TO_INVOICE')
+    ctx.log(job.id, 'job.status_changed', `Checked by ${me?.name ?? 'the workshop'} and released for invoicing`, { verified: true })
+    return job
+  })
+
+/** The invoice is raised in the back office, so the customer can collect. Later this comes from the sync. */
+export const markInvoiced = (jobId: Id): Promise<Result<JobCard>> =>
+  write('job.payment', 'Invoiced, ready to collect', jobId, (ctx) => {
+    const job = jobOf(ctx.db, jobId)
+    if (job.status !== 'READY_TO_INVOICE') throw new DataError('Only a checked job can be invoiced.')
+    job.invoicedAt = nowIso()
+    job.sync = pending
+    setStatus(ctx, job, 'READY_FOR_CUSTOMER')
+    return job
+  })
+
+/** The customer paid. This finishes the job. */
+export const markPaid = (jobId: Id): Promise<Result<JobCard>> =>
+  write('job.payment', 'Paid', jobId, (ctx) => {
+    const job = jobOf(ctx.db, jobId)
+    if (job.status !== 'READY_FOR_CUSTOMER') throw new DataError('Only an invoiced job can be marked paid.')
+    job.paidAt = nowIso()
+    job.sync = pending
+    setStatus(ctx, job, 'CLOSED')
+    return job
   })

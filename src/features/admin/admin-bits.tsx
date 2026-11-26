@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { fieldClass } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import type { ChecklistTemplateItem, TemplatePart } from '@/types'
+import { Select } from '@/components/ui/fields'
 
 /** A titled block on an admin screen. */
 export function Section({
@@ -188,7 +189,7 @@ export function ChecklistEditor({
             placeholder="Front brake pads"
             className={cn(fieldClass, 'col-span-3 @lg:col-span-1')}
           />
-          <select
+          <Select
             aria-label={`Checklist item ${i + 1} type`}
             value={c.kind}
             disabled={disabled}
@@ -197,7 +198,7 @@ export function ChecklistEditor({
           >
             <option value="check">Tick</option>
             <option value="reading">Reading</option>
-          </select>
+          </Select>
           {c.kind === 'reading' ? (
             <input aria-label={`Checklist item ${i + 1} unit`} value={c.unit ?? ''} disabled={disabled} onChange={(e) => update(i, { unit: e.target.value })} placeholder="psi" className={fieldClass} />
           ) : (

@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as MechanicRouteImport } from './routes/mechanic'
 import { Route as OfficeAdminRouteImport } from './routes/_office/admin'
 import { Route as OfficeCalendarRouteImport } from './routes/_office/calendar'
+import { Route as OfficePartsRouteImport } from './routes/_office/parts'
 import { Route as OfficeReportsRouteImport } from './routes/_office/reports'
 import { Route as OfficeTodayRouteImport } from './routes/_office/today'
 import { Route as OfficeWorkshopRouteImport } from './routes/_office/workshop'
@@ -65,6 +66,11 @@ const OfficeAdminRoute = OfficeAdminRouteImport.update({
 const OfficeCalendarRoute = OfficeCalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
+  getParentRoute: () => OfficeRoute,
+} as any)
+const OfficePartsRoute = OfficePartsRouteImport.update({
+  id: '/parts',
+  path: '/parts',
   getParentRoute: () => OfficeRoute,
 } as any)
 const OfficeReportsRoute = OfficeReportsRouteImport.update({
@@ -186,6 +192,7 @@ export interface FileRoutesByFullPath {
   '/mechanic': typeof MechanicRouteWithChildren
   '/admin': typeof OfficeAdminRouteWithChildren
   '/calendar': typeof OfficeCalendarRoute
+  '/parts': typeof OfficePartsRoute
   '/reports': typeof OfficeReportsRoute
   '/today': typeof OfficeTodayRoute
   '/workshop': typeof OfficeWorkshopRoute
@@ -213,6 +220,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/calendar': typeof OfficeCalendarRoute
+  '/parts': typeof OfficePartsRoute
   '/reports': typeof OfficeReportsRoute
   '/today': typeof OfficeTodayRoute
   '/workshop': typeof OfficeWorkshopRoute
@@ -244,6 +252,7 @@ export interface FileRoutesById {
   '/mechanic': typeof MechanicRouteWithChildren
   '/_office/admin': typeof OfficeAdminRouteWithChildren
   '/_office/calendar': typeof OfficeCalendarRoute
+  '/_office/parts': typeof OfficePartsRoute
   '/_office/reports': typeof OfficeReportsRoute
   '/_office/today': typeof OfficeTodayRoute
   '/_office/workshop': typeof OfficeWorkshopRoute
@@ -275,6 +284,7 @@ export interface FileRouteTypes {
     | '/mechanic'
     | '/admin'
     | '/calendar'
+    | '/parts'
     | '/reports'
     | '/today'
     | '/workshop'
@@ -302,6 +312,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/calendar'
+    | '/parts'
     | '/reports'
     | '/today'
     | '/workshop'
@@ -332,6 +343,7 @@ export interface FileRouteTypes {
     | '/mechanic'
     | '/_office/admin'
     | '/_office/calendar'
+    | '/_office/parts'
     | '/_office/reports'
     | '/_office/today'
     | '/_office/workshop'
@@ -406,6 +418,13 @@ declare module '@tanstack/react-router' {
       path: '/calendar'
       fullPath: '/calendar'
       preLoaderRoute: typeof OfficeCalendarRouteImport
+      parentRoute: typeof OfficeRoute
+    }
+    '/_office/parts': {
+      id: '/_office/parts'
+      path: '/parts'
+      fullPath: '/parts'
+      preLoaderRoute: typeof OfficePartsRouteImport
       parentRoute: typeof OfficeRoute
     }
     '/_office/reports': {
@@ -592,6 +611,7 @@ const OfficeAdminRouteWithChildren = OfficeAdminRoute._addFileChildren(
 interface OfficeRouteChildren {
   OfficeAdminRoute: typeof OfficeAdminRouteWithChildren
   OfficeCalendarRoute: typeof OfficeCalendarRoute
+  OfficePartsRoute: typeof OfficePartsRoute
   OfficeReportsRoute: typeof OfficeReportsRoute
   OfficeTodayRoute: typeof OfficeTodayRoute
   OfficeWorkshopRoute: typeof OfficeWorkshopRoute
@@ -605,6 +625,7 @@ interface OfficeRouteChildren {
 const OfficeRouteChildren: OfficeRouteChildren = {
   OfficeAdminRoute: OfficeAdminRouteWithChildren,
   OfficeCalendarRoute: OfficeCalendarRoute,
+  OfficePartsRoute: OfficePartsRoute,
   OfficeReportsRoute: OfficeReportsRoute,
   OfficeTodayRoute: OfficeTodayRoute,
   OfficeWorkshopRoute: OfficeWorkshopRoute,

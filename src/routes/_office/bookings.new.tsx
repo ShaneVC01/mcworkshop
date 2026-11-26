@@ -1,26 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { PackageSearch } from 'lucide-react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Check, Search, UserPlus } from 'lucide-react'
 import { useCan } from '@/auth/permissions'
 import { Card } from '@/components/domain/job-bits'
-import { RegoPlate } from '@/components/domain/rego-plate'
-import { describeModel } from '@/lib/service-profiles'
-import { PageHeader } from '@/components/shell/app-shell'
 import { ActionError, DataView, Skeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
-import { Field, fieldClass } from '@/components/ui/sheet'
-import { createBooking, createCustomer, createVehicle } from '@/data/actions'
-import { useAction, useAvailability, useSearch, useServicePlan, useServiceTemplates, useTechnicians, useVehicle } from '@/data/hooks'
-import {
-  addMinutes, at, dayKey, formatDate, formatDayRelative, formatHours, formatKm, formatMoney, formatTime, gstOf,
-  normaliseRego, workingToday,
-} from '@/lib/format'
-import { cn } from '@/lib/utils'
-import type { AvailabilitySlot, RegoState, ServiceTemplate } from '@/types'
+import { createBooking } from '@/data/actions'
+import { useAction, useBookingCustomer, useBookingEstimate, useVehicle } from '@/data/hooks'
+import { CustomerCard } from '@/features/booking/customer-card'
+import { FindCustomer, type Picked } from '@/features/booking/find-customer'
+import { FitIn } from '@/features/booking/fit-in'
+import { VehicleSection } from '@/features/booking/vehicle-section'
+import { BOOKING_TYPE_LABEL, type ChosenTime } from '@/features/booking/booking-bits'
+import { WorkSection, type ChosenExtra, type ChosenService } from '@/features/booking/work-section'
+import { addMinutes, at, dayKey, formatDate, formatHours, formatMoney, formatTime, workingToday } from '@/lib/format'
+import type { AvailabilityRequest, BookingItem, BookingType, Id } from '@/types'
 
 interface NewBookingSearch {
   vehicle?: string
-  tech?: string
   day?: string
   time?: string
 }
@@ -28,197 +25,184 @@ interface NewBookingSearch {
 export const Route = createFileRoute('/_office/bookings/new')({
   validateSearch: (s: Record<string, unknown>): NewBookingSearch => ({
     vehicle: typeof s.vehicle === 'string' ? s.vehicle : undefined,
-    tech: typeof s.tech === 'string' ? s.tech : undefined,
     day: typeof s.day === 'string' ? s.day : undefined,
     time: typeof s.time === 'string' ? s.time : undefined,
   }),
   component: NewBookingPage,
 })
 
-const states: RegoState[] = ['QLD', 'NSW', 'VIC', 'SA', 'WA', 'TAS', 'NT', 'ACT']
-const slotKey = (s: AvailabilitySlot) => `${s.technicianId}-${s.startAt}`
-
-/** The whole booking fits on one screen: vehicle, work, time, price, confirm. */
+/** Search first. Once the customer is found, everything else is on one screen. */
 function NewBookingPage() {
+  const search = Route.useSearch()
+  const [picked, setPicked] = useState<Picked | null>(null)
+  const [searching, setSearching] = useState(false)
+  // Coming from a vehicle page: start with that vehicle's owner.
+  const fromVehicle = useVehicle(search.vehicle ?? '')
+  const preset = search.vehicle && !searching && fromVehicle.data ? { customerId: fromVehicle.data.data.customer.id, vehicleId: search.vehicle } : null
+  const current = picked ?? preset
+
+  if (search.vehicle && !searching && !picked && fromVehicle.isPending) return <Skeleton className="m-6 h-40" />
+  if (!current) return <FindCustomer onPick={setPicked} />
+  return (
+    <BookingDesk
+      key={current.customerId}
+      initial={current}
+      onRestart={() => {
+        setPicked(null)
+        setSearching(true)
+      }}
+    />
+  )
+}
+
+function BookingDesk({ initial, onRestart }: { initial: Picked; onRestart: () => void }) {
   const search = Route.useSearch()
   const navigate = useNavigate()
   const canOverride = useCan('booking.override-conflict')
+  const customer = useBookingCustomer(initial.customerId || undefined)
 
-  const [vehicleId, setVehicleId] = useState(search.vehicle ?? '')
-  const [templateId, setTemplateId] = useState('')
+  const [pickedVehicleId, setVehicleId] = useState<Id | undefined>(initial.vehicleId)
+  // The reading typed today, kept per vehicle. Until then the one on file shows.
+  const [typedOdometer, setTypedOdometer] = useState<{ vehicleId?: Id; km: string }>({ km: '' })
+  const [bookingType, setBookingType] = useState<BookingType>('service')
+  const [services, setServices] = useState<ChosenService[]>([])
+  const [extras, setExtras] = useState<ChosenExtra[]>([])
+  const [items, setItems] = useState<BookingItem[]>([])
   const [concern, setConcern] = useState('')
-  const [chosen, setChosen] = useState('')
+  // A day picked on the calendar comes first.
+  const [day, setDay] = useState<string | undefined>(search.day)
+  const [chosen, setChosen] = useState<ChosenTime | undefined>()
   const [tentative, setTentative] = useState(false)
 
-  const templates = useServiceTemplates()
-  const technicians = useTechnicians()
-  const chosenTemplate = templates.data?.data.find((t) => t.id === templateId)
-  // The vehicle's own profile wins over the generic template when there is one.
-  const plan = useServicePlan(vehicleId || undefined, templateId || undefined)
-  const template = plan.data?.data.template ?? chosenTemplate
-  const labourRate = plan.data?.data.labourRateCents ?? 0
-  const fromDay = search.day ?? workingToday()
-  const request = useMemo(
-    () => (template ? { labourHours: template.labourHours, skill: template.skill, bayType: template.bayType, fromDay } : null),
-    [template, fromDay],
+  const vehicles = useMemo(() => customer.data?.data.vehicles ?? [], [customer.data])
+  // One vehicle means no question to ask.
+  const vehicleId = pickedVehicleId ?? (vehicles.length === 1 ? vehicles[0]!.id : undefined)
+  const vehicle = vehicles.find((v) => v.id === vehicleId)
+  const odometer = typedOdometer.vehicleId === vehicleId ? typedOdometer.km : vehicle?.odometerKm ? String(vehicle.odometerKm) : ''
+  const setOdometer = (km: string) => setTypedOdometer({ vehicleId, km })
+
+  const chooseVehicle = (id: Id) => {
+    setVehicleId(id)
+    setServices([])
+    setExtras([])
+    setItems([])
+    setChosen(undefined)
+  }
+  const changeType = (t: BookingType) => {
+    setBookingType(t)
+    // Repair only has no scheduled service, so drop the one suggested by the odometer.
+    if (t === 'repair') setServices((list) => list.filter((s) => !/km service/i.test(s.label)))
+  }
+  const toggleService = (s: ChosenService) =>
+    setServices((list) => (list.some((x) => x.templateId === s.templateId) ? list.filter((x) => x.templateId !== s.templateId) : [...list, s]))
+  const toggleExtra = (e: ChosenExtra) =>
+    setExtras((list) => (list.some((x) => x.sourceId === e.sourceId) ? list.filter((x) => x.sourceId !== e.sourceId) : [...list, e]))
+
+  const odometerKm = Number(odometer) || undefined
+  const templateIds = useMemo(() => services.map((s) => s.templateId), [services])
+  const extraLines = useMemo(() => extras.map(({ description, labourHours, partsCents }) => ({ description, labourHours, partsCents })), [extras])
+  const estimate = useBookingEstimate(vehicleId, templateIds, extraLines, items)
+  const e = estimate.data?.data
+  const hasWork = templateIds.length + extraLines.length + items.length > 0
+  const request = useMemo<AvailabilityRequest | null>(
+    () => (hasWork && e ? { labourHours: e.labourHours, skills: e.skills, bayType: e.bayType, fromDay: workingToday(), notBefore: e.partsReadyDay, limit: 5 } : null),
+    [hasWork, e],
   )
-  const availability = useAvailability(request)
+  const startAt = chosen ? at(chosen.day, chosen.time) : undefined
+
   const book = useAction(createBooking)
-
-  // A slot picked on the calendar comes first in the list.
-  const picked = useMemo<AvailabilitySlot | null>(() => {
-    if (!search.tech || !search.day || !search.time || !template) return null
-    const tech = technicians.data?.data.find((t) => t.id === search.tech)
-    if (!tech) return null
-    const startAt = at(search.day, search.time)
-    return { technicianId: tech.id, technicianName: tech.name, startAt, endAt: addMinutes(startAt, template.labourHours * 60) }
-  }, [search.tech, search.day, search.time, template, technicians.data])
-
-  const slots = useMemo(() => {
-    const found = availability.data?.data ?? []
-    return picked ? [picked, ...found.filter((s) => slotKey(s) !== slotKey(picked))] : found
-  }, [availability.data, picked])
-  const slot = slots.find((s) => slotKey(s) === chosen) ?? slots[0]
-
+  const chooseTime = useCallback((c: ChosenTime | undefined) => setChosen(c), [])
   const confirm = (override = false) => {
-    if (!template || !slot || !vehicleId) return
+    if (!vehicleId || !startAt || !hasWork) return
     void book
       .run({
-        vehicleId, serviceTemplateId: template.id, customerConcern: concern, startAt: slot.startAt,
-        technicianId: slot.technicianId, bayId: slot.bayId, tentative, override,
+        vehicleId, services: services.map((s) => ({ templateId: s.templateId, label: s.label })), extras, items, bookingType,
+        customerConcern: concern, startAt, tentative, override, odometerKm,
       })
       .then((result) => navigate({ to: '/calendar', search: { day: dayKey(result.data.startAt) } }))
       .catch(() => undefined)
   }
 
-  const labourCents = template ? Math.round(template.labourHours * labourRate) : 0
-  const partsCents = template ? template.parts.reduce((s, p) => s + p.qty * p.unitCents, 0) : 0
-  const subtotal = labourCents + partsCents
-
   return (
-    <div className="mx-auto max-w-6xl pb-10">
-      <PageHeader title="New booking" />
-      <div className="grid gap-6 px-4 sm:px-6 @4xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="space-y-6">
-          <Step title="Vehicle" done={Boolean(vehicleId)}>
-            {vehicleId ? <ChosenVehicle id={vehicleId} onChange={() => setVehicleId('')} /> : <VehiclePicker onPick={setVehicleId} />}
-          </Step>
-
-          <Step title="What does it need?" done={Boolean(template)}>
-            <DataView query={templates} loading={<Skeleton className="h-40" />}>
-              {(list) => (
-                <div className="grid gap-2 @lg:grid-cols-2 @3xl:grid-cols-3">
-                  {list.filter((t) => t.active !== false).map((t) => (
-                    <TemplateButton key={t.id} template={t} selected={t.id === templateId} onSelect={() => { setTemplateId(t.id); setChosen('') }} />
-                  ))}
-                </div>
-              )}
-            </DataView>
-            <div className="mt-4">
-              <Field label="In the customer's words" hint="Write it as they say it. The mechanic's diagnosis is recorded separately.">
-                <textarea
-                  value={concern}
-                  onChange={(e) => setConcern(e.target.value)}
-                  rows={2}
-                  placeholder="Knocking from left front when turning slowly"
-                  className={cn(fieldClass, 'h-auto py-2')}
+    <DataView query={customer} loading={<Skeleton className="m-6 h-60" />}>
+      {({ customer: c, lastVisit }) => (
+        <div className="mx-auto max-w-7xl px-4 pt-5 pb-10 sm:px-6">
+          <h1 className="sr-only">New booking for {c.name}</h1>
+          <div className="grid gap-6 @5xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="min-w-0 space-y-8 @container">
+              <VehicleSection
+                customerId={c.id} vehicles={vehicles} vehicleId={vehicleId} onVehicle={chooseVehicle}
+                odometer={odometer} onOdometer={setOdometer}
+              />
+              {vehicleId && (
+                <WorkSection
+                  vehicleId={vehicleId} odometerKm={odometerKm} bookingType={bookingType} onBookingType={changeType}
+                  services={services} extras={extras} onService={toggleService} onExtra={toggleExtra} items={items} onItems={setItems}
+                  concern={concern} onConcern={setConcern}
                 />
-              </Field>
-            </div>
-          </Step>
-
-          <Step title="When can we fit it in?" done={Boolean(slot)}>
-            {!template ? (
-              <p className="text-muted-foreground">Choose the work first and the next openings will show here.</p>
-            ) : (
-              <DataView query={availability} loading={<Skeleton className="h-32" />}>
-                {() =>
-                  slots.length === 0 ? (
-                    <p className="font-semibold">No opening in the next three weeks for a mechanic with this skill. Place it by hand on the calendar.</p>
-                  ) : (
-                    <ul className="space-y-2" role="radiogroup" aria-label="Available times">
-                      {slots.map((s) => {
-                        const active = slot && slotKey(s) === slotKey(slot)
-                        return (
-                          <li key={slotKey(s)}>
-                            <button
-                              type="button"
-                              role="radio"
-                              aria-checked={Boolean(active)}
-                              onClick={() => setChosen(slotKey(s))}
-                              className={cn(
-                                'tabular flex min-h-14 w-full flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border-2 px-4 py-2 text-left',
-                                active ? 'border-primary bg-accent' : 'border-border hover:border-foreground/40',
-                              )}
-                            >
-                              <span className="w-28 font-display text-lg font-medium">{formatDayRelative(dayKey(s.startAt))}</span>
-                              <span className="w-20 font-semibold">{formatTime(s.startAt)}</span>
-                              <span className="flex-1">{s.technicianName}</span>
-                              {picked && slotKey(s) === slotKey(picked) && <span className="text-sm text-muted-foreground">Picked on the calendar</span>}
-                              {active && <Check className="size-5 text-primary-strong" aria-hidden="true" />}
-                            </button>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )
-                }
-              </DataView>
-            )}
-          </Step>
-        </div>
-
-        <aside className="@4xl:sticky @4xl:top-4 @4xl:self-start">
-          <Card className="p-4">
-            <h2 className="mb-3 text-xl">Estimate</h2>
-            {template ? (
-              <>
-                {plan.data && vehicleId && (
-                  <p className="mb-3 rounded-lg bg-secondary px-3 py-2 text-sm">
-                    {plan.data.data.source === 'profile' && plan.data.data.model
-                      ? `Times and parts from the ${describeModel(plan.data.data.model)} profile.`
-                      : 'Generic estimate. This vehicle has no profile for this service yet.'}
-                  </p>
-                )}
-                <dl className="tabular space-y-1.5">
-                  <Row label={`Labour, ${formatHours(template.labourHours)}`} value={formatMoney(labourCents)} />
-                  <Row label="Parts" value={formatMoney(partsCents)} />
-                  <Row label="GST" value={formatMoney(gstOf(subtotal))} />
-                  <div className="flex items-baseline justify-between border-t pt-2">
-                    <dt className="font-semibold">Total inc GST</dt>
-                    <dd className="font-display text-3xl font-medium">{formatMoney(subtotal + gstOf(subtotal))}</dd>
-                  </div>
-                </dl>
-                {slot && (
-                  <dl className="tabular mt-4 space-y-1.5 rounded-lg bg-secondary p-3">
-                    <Row label="Drop off" value={`${formatDate(slot.startAt)}, ${formatTime(slot.startAt)}`} />
-                    <Row label="Expected ready" value={formatTime(addMinutes(slot.endAt, 60))} />
-                    <Row label="Mechanic" value={slot.technicianName.split(' ')[0]!} />
-                  </dl>
-                )}
-              </>
-            ) : (
-              <p className="text-muted-foreground">Labour, parts and GST show here once the work is chosen.</p>
-            )}
-            <label className="mt-4 flex min-h-touch items-center gap-3">
-              <input type="checkbox" checked={tentative} onChange={(e) => setTentative(e.target.checked)} className="size-5 accent-[var(--primary)]" />
-              Hold as tentative until the customer confirms
-            </label>
-            <div className="mt-3 space-y-2">
-              <ActionError error={book.error} />
-              <Button size="lg" className="w-full" disabled={!vehicleId || !template || !slot || book.isPending} onClick={() => confirm()}>
-                {book.isPending ? 'Saving' : 'Confirm booking'}
-              </Button>
-              {book.error && canOverride && (
-                <Button variant="destructive" className="w-full" disabled={book.isPending} onClick={() => confirm(true)}>
-                  Book anyway
-                </Button>
+              )}
+              {vehicleId && (
+                <FitIn request={request} preferredTime={search.time} chosen={chosen} onChoose={chooseTime} day={day} onDay={setDay} parts={e} />
               )}
             </div>
-          </Card>
-        </aside>
-      </div>
-    </div>
+
+            <aside className="space-y-4 @5xl:sticky @5xl:top-4 @5xl:self-start">
+              <CustomerCard customer={c} lastVisit={lastVisit} onChange={onRestart} />
+              <Card className="p-4">
+                <h2 className="mb-3 text-xl">Booking</h2>
+                <p className="mb-3 rounded-lg bg-secondary px-3 py-2 font-semibold">{BOOKING_TYPE_LABEL[bookingType]}</p>
+                {hasWork && e ? (
+                  <>
+                    {e.profileNames.length > 0 && (
+                      <p className="mb-3 text-sm text-muted-foreground">Times and parts from this vehicle's profile for {e.profileNames.join(', ')}.</p>
+                    )}
+                    <dl className="tabular space-y-1.5">
+                      <Row label={`Labour, ${formatHours(e.labourHours)}`} value={formatMoney(e.labourCents)} />
+                      <Row label="Parts" value={formatMoney(e.partsCents)} />
+                      <Row label="GST" value={formatMoney(e.gstCents)} />
+                      <div className="flex items-baseline justify-between border-t pt-2">
+                        <dt className="font-semibold">Total inc GST</dt>
+                        <dd className="font-display text-3xl font-medium">{formatMoney(e.totalCents)}</dd>
+                      </div>
+                    </dl>
+                    {startAt && (
+                      <dl className="tabular mt-4 space-y-1.5 rounded-lg bg-secondary p-3">
+                        <Row label="Drop off" value={`${formatDate(startAt)}, ${formatTime(startAt)}`} />
+                        <Row label="Expected ready" value={formatTime(addMinutes(startAt, e.labourHours * 60 + 60))} />
+                        <p className="pt-1 text-sm text-muted-foreground">The workshop assigns a mechanic when the vehicle arrives.</p>
+                      </dl>
+                    )}
+                    {e.partsReadyDay && (
+                      <p className="mt-3 flex gap-2 text-sm font-semibold">
+                        <PackageSearch className="size-4 shrink-0 text-status-parts" aria-hidden="true" />
+                        Parts to order. Not before {formatDate(e.partsReadyDay)}.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">Labour, parts and GST show here once the work is chosen.</p>
+                )}
+                <label className="mt-4 flex min-h-touch items-center gap-3">
+                  <input type="checkbox" checked={tentative} onChange={(ev) => setTentative(ev.target.checked)} className="size-5 accent-[var(--primary)]" />
+                  Hold as tentative until the customer confirms
+                </label>
+                <div className="mt-3 space-y-2">
+                  <ActionError error={book.error} />
+                  <Button size="lg" className="w-full" disabled={!vehicleId || !hasWork || !startAt || book.isPending} onClick={() => confirm()}>
+                    {book.isPending ? 'Saving' : 'Confirm booking'}
+                  </Button>
+                  {book.error && canOverride && (
+                    <Button variant="destructive" className="w-full" disabled={book.isPending} onClick={() => confirm(true)}>
+                      Book anyway
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            </aside>
+          </div>
+        </div>
+      )}
+    </DataView>
   )
 }
 
@@ -228,174 +212,5 @@ function Row({ label, value }: { label: string; value: string }) {
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="font-semibold">{value}</dd>
     </div>
-  )
-}
-
-function Step({ title, done, children }: { title: string; done: boolean; children: React.ReactNode }) {
-  return (
-    <section>
-      <h2 className="mb-3 flex items-center gap-2 text-2xl">
-        {title}
-        {done && <Check className="size-6 text-primary-strong" aria-label="Done" />}
-      </h2>
-      {children}
-    </section>
-  )
-}
-
-function TemplateButton({ template, selected, onSelect }: { template: ServiceTemplate; selected: boolean; onSelect: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onSelect}
-      className={cn(
-        'flex min-h-16 w-full flex-col justify-center rounded-xl border-2 px-4 py-2 text-left',
-        selected ? 'border-primary bg-accent' : 'border-border hover:border-foreground/40',
-      )}
-    >
-      <span className="font-semibold">{template.name}</span>
-      <span className="tabular text-sm text-muted-foreground">
-        {template.category}, {formatHours(template.labourHours)}
-      </span>
-    </button>
-  )
-}
-
-function ChosenVehicle({ id, onChange }: { id: string; onChange: () => void }) {
-  const detail = useVehicle(id)
-  return (
-    <DataView query={detail} loading={<Skeleton className="h-24" />}>
-      {({ vehicle, customer, lastVisit }) => (
-        <Card className="flex flex-wrap items-center gap-4 p-4">
-          <RegoPlate registration={vehicle.registration} state={vehicle.registrationState} size="lg" />
-          <div className="min-w-0 flex-1">
-            <div className="font-display text-xl font-medium">
-              {vehicle.year} {vehicle.make} {vehicle.model}
-            </div>
-            <div>{customer.name}, {customer.mobile}</div>
-            <div className="tabular text-sm text-muted-foreground">
-              {formatKm(vehicle.odometerKm)}
-              {lastVisit ? `, last visit ${formatDate(lastVisit)}` : ', first visit'}
-            </div>
-          </div>
-          <Button variant="outline" onClick={onChange}>
-            Change vehicle
-          </Button>
-        </Card>
-      )}
-    </DataView>
-  )
-}
-
-function VehiclePicker({ onPick }: { onPick: (vehicleId: string) => void }) {
-  const [query, setQuery] = useState('')
-  const [adding, setAdding] = useState(false)
-  const results = useSearch(query)
-  const inputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => inputRef.current?.focus(), [])
-  const hits = (results.data?.data ?? []).filter((h) => h.kind === 'vehicle')
-
-  if (adding) return <NewVehicleForm rego={query} onDone={onPick} onCancel={() => setAdding(false)} />
-
-  return (
-    <div>
-      <label className="relative block">
-        <span className="sr-only">Search by rego, customer name or mobile</span>
-        <Search className="pointer-events-none absolute top-1/2 left-4 size-6 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && hits[0]) onPick(hits[0].id)
-          }}
-          placeholder="Rego, customer name or mobile"
-          autoComplete="off"
-          autoCapitalize="characters"
-          className="h-16 w-full rounded-xl border-2 border-foreground bg-background pr-4 pl-13 font-display text-2xl tracking-wide uppercase placeholder:font-sans placeholder:text-lg placeholder:tracking-normal placeholder:normal-case"
-        />
-      </label>
-      {query.trim().length >= 2 && (
-        <div className="mt-2">
-          {results.isError ? (
-            <ActionError error={results.error} />
-          ) : results.isPending ? (
-            <Skeleton className="h-16" />
-          ) : (
-            <ul className="space-y-2">
-              {hits.map((h) => (
-                <li key={h.id}>
-                  <button type="button" onClick={() => onPick(h.id)} className="flex min-h-16 w-full items-center gap-3 rounded-xl border bg-card px-3 py-2 text-left shadow-card hover:border-primary">
-                    {h.vehicle && <RegoPlate registration={h.vehicle.registration} state={h.vehicle.registrationState} />}
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold">{h.title}</span>
-                      <span className="block truncate text-muted-foreground">{h.subtitle}</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-              <li>
-                <Button variant="outline" onClick={() => setAdding(true)}>
-                  <UserPlus aria-hidden="true" />
-                  {hits.length ? 'Add a different vehicle' : `Add ${normaliseRego(query)} as a new vehicle`}
-                </Button>
-              </li>
-            </ul>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function NewVehicleForm({ rego, onDone, onCancel }: { rego: string; onDone: (vehicleId: string) => void; onCancel: () => void }) {
-  const [form, setForm] = useState({
-    name: '', mobile: '', registration: /\d/.test(rego) ? normaliseRego(rego) : '', state: 'QLD' as RegoState,
-    make: '', model: '', year: '', odometerKm: '',
-  })
-  const addCustomer = useAction(createCustomer)
-  const addVehicle = useAction(createVehicle)
-  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }))
-  const ready = form.name && form.mobile && form.registration && form.make && form.model
-  const busy = addCustomer.isPending || addVehicle.isPending
-
-  const save = async () => {
-    try {
-      const customer = await addCustomer.run({ name: form.name.trim(), mobile: form.mobile.trim() })
-      const vehicle = await addVehicle.run({
-        registration: form.registration, registrationState: form.state, make: form.make.trim(), model: form.model.trim(),
-        year: Number(form.year) || undefined, odometerKm: Number(form.odometerKm) || undefined, customerId: customer.data.id,
-      })
-      onDone(vehicle.data.id)
-    } catch {
-      // The error is shown below.
-    }
-  }
-
-  return (
-    <Card className="space-y-3 p-4">
-      <h3 className="text-xl">New customer and vehicle</h3>
-      <div className="grid gap-3 @lg:grid-cols-2">
-        <Field label="Customer name"><input className={fieldClass} value={form.name} onChange={set('name')} autoComplete="off" /></Field>
-        <Field label="Mobile"><input className={fieldClass} value={form.mobile} onChange={set('mobile')} inputMode="tel" autoComplete="off" /></Field>
-        <Field label="Rego"><input className={cn(fieldClass, 'uppercase')} value={form.registration} onChange={set('registration')} autoCapitalize="characters" /></Field>
-        <Field label="State">
-          <select className={fieldClass} value={form.state} onChange={set('state')}>
-            {states.map((s) => <option key={s}>{s}</option>)}
-          </select>
-        </Field>
-        <Field label="Make"><input className={fieldClass} value={form.make} onChange={set('make')} placeholder="Toyota" /></Field>
-        <Field label="Model"><input className={fieldClass} value={form.model} onChange={set('model')} placeholder="LandCruiser 79" /></Field>
-        <Field label="Year"><input className={fieldClass} value={form.year} onChange={set('year')} inputMode="numeric" /></Field>
-        <Field label="Odometer, km"><input className={fieldClass} value={form.odometerKm} onChange={set('odometerKm')} inputMode="numeric" /></Field>
-      </div>
-      <ActionError error={addCustomer.error ?? addVehicle.error} />
-      <div className="flex flex-wrap gap-2">
-        <Button disabled={!ready || busy} onClick={() => void save()}>{busy ? 'Saving' : 'Save and continue'}</Button>
-        <Button variant="ghost" onClick={onCancel}>Back to search</Button>
-      </div>
-    </Card>
   )
 }

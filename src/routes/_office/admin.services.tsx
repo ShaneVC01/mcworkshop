@@ -10,15 +10,17 @@ import { Button } from '@/components/ui/button'
 import { Field, fieldClass, Sheet } from '@/components/ui/sheet'
 import { removeServiceProfile, removeServiceTemplate, saveServiceProfile, saveServiceTemplate } from '@/data/actions'
 import {
-  useAction, useServiceActuals, useServiceProfiles, useServiceTemplates, useVehicleLibrary, useWorkshopSettings,
+  useAction, useItems, useServiceActuals, useServiceProfiles, useServiceTemplates, useVehicleLibrary, useWorkshopSettings,
 } from '@/data/hooks'
 import { ActiveBadge, ChecklistEditor, NumberInput, PartsEditor, ReadOnlyNote } from '@/features/admin/admin-bits'
 import { FUEL_LABEL, SKILL_OPTIONS, VEHICLE_CLASS_LABEL } from '@/features/admin/labels'
 import { formatHours, formatMoney, gstOf } from '@/lib/format'
+import { matchesItem } from '@/lib/item-lines'
 import { describeModel } from '@/lib/service-profiles'
 import { cn } from '@/lib/utils'
+import { Select } from '@/components/ui/fields'
 import type {
-  BayType, ChecklistTemplateItem, FuelType, ServiceActual, ServiceCategory, ServiceProfile, ServiceTemplate, Skill,
+  BayType, CatalogueItem, ChecklistTemplateItem, FuelType, ServiceActual, ServiceCategory, ServiceProfile, ServiceTemplate, Skill,
   TemplatePart, VehicleClass, VehicleModel,
 } from '@/types'
 
@@ -49,7 +51,7 @@ function scopeOf(t: ServiceTemplate) {
   return bits.length ? bits.join(', ') : 'Any vehicle'
 }
 
-type Tab = 'profiles' | 'templates'
+type Tab = 'profiles' | 'templates' | 'items'
 
 function ServicesPage() {
   const [tab, setTab] = useState<Tab>('profiles')
@@ -64,6 +66,7 @@ function ServicesPage() {
         subtitle="What each service needs: hours, parts and checks. A vehicle profile wins over the generic template."
         actions={
           canEdit &&
+          tab !== 'items' &&
           (tab === 'profiles' ? (
             <Button onClick={() => setProfileSheet({})}>
               <Plus aria-hidden="true" />
@@ -81,7 +84,7 @@ function ServicesPage() {
         {!canEdit && <ReadOnlyNote>You can look at services but not change them. Ask an administrator.</ReadOnlyNote>}
         <div role="tablist" aria-label="Service catalogue" className="flex gap-2">
           {(
-            [['profiles', 'Vehicle profiles'], ['templates', 'Generic templates']] as const
+            [['profiles', 'Vehicle profiles'], ['templates', 'Generic templates'], ['items', 'Items']] as const
           ).map(([value, label]) => (
             <button
               key={value}
@@ -98,7 +101,9 @@ function ServicesPage() {
             </button>
           ))}
         </div>
-        {tab === 'profiles' ? (
+        {tab === 'items' ? (
+          <ItemsTab />
+        ) : tab === 'profiles' ? (
           <ProfilesTab canEdit={canEdit} onOpen={(profile, templateId) => setProfileSheet({ profile, templateId })} />
         ) : (
           <TemplatesTab onOpen={setTemplateSheet} />
@@ -276,20 +281,20 @@ function ProfileSheet({
       <form className="space-y-4 @container" onSubmit={(e) => { e.preventDefault(); if (canEdit) submit() }}>
         <div className="grid gap-3 @sm:grid-cols-2">
           <Field label="Service">
-            <select value={tplId} disabled={Boolean(profile) || !canEdit} onChange={(e) => { setTplId(e.target.value); setHours(undefined); setParts(undefined) }} className={fieldClass}>
+            <Select value={tplId} disabled={Boolean(profile) || !canEdit} onChange={(e) => { setTplId(e.target.value); setHours(undefined); setParts(undefined) }} className={fieldClass}>
               <option value="">Choose a service</option>
               {allTemplates.filter((t) => t.active !== false || t.id === tplId).map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Vehicle">
-            <select value={modelId} disabled={Boolean(profile) || !canEdit} onChange={(e) => setModelId(e.target.value)} className={fieldClass}>
+            <Select value={modelId} disabled={Boolean(profile) || !canEdit} onChange={(e) => setModelId(e.target.value)} className={fieldClass}>
               <option value="">Choose a vehicle</option>
               {models.map((m) => (
                 <option key={m.id} value={m.id}>{describeModel(m)}</option>
               ))}
-            </select>
+            </Select>
           </Field>
         </div>
 
@@ -446,37 +451,37 @@ function TemplateSheet({ template, canEdit, onClose }: { template: ServiceTempla
         </Field>
         <div className="grid gap-3 @sm:grid-cols-2">
           <Field label="Category">
-            <select value={category} disabled={!canEdit} onChange={(e) => setCategory(e.target.value as ServiceCategory)} className={fieldClass}>
+            <Select value={category} disabled={!canEdit} onChange={(e) => setCategory(e.target.value as ServiceCategory)} className={fieldClass}>
               {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Interval, km" hint="For scheduled services only.">
             <NumberInput label="Interval in kilometres" digits={0} value={intervalKm} disabled={!canEdit} onChange={setIntervalKm} placeholder="30000" />
           </Field>
           <Field label="For this type of vehicle" hint="Leave on Any to apply to every vehicle.">
-            <select value={vehicleClass} disabled={!canEdit} onChange={(e) => setVehicleClass(e.target.value as VehicleClass | '')} className={fieldClass}>
+            <Select value={vehicleClass} disabled={!canEdit} onChange={(e) => setVehicleClass(e.target.value as VehicleClass | '')} className={fieldClass}>
               <option value="">Any vehicle</option>
               {(Object.keys(VEHICLE_CLASS_LABEL) as VehicleClass[]).map((c) => <option key={c} value={c}>{VEHICLE_CLASS_LABEL[c]}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="For this fuel">
-            <select value={fuel} disabled={!canEdit} onChange={(e) => setFuel(e.target.value as FuelType | '')} className={fieldClass}>
+            <Select value={fuel} disabled={!canEdit} onChange={(e) => setFuel(e.target.value as FuelType | '')} className={fieldClass}>
               <option value="">Any fuel</option>
               {(Object.keys(FUEL_LABEL) as FuelType[]).map((f) => <option key={f} value={f}>{FUEL_LABEL[f]}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Labour hours">
             <NumberInput label="Labour hours" value={hours} disabled={!canEdit} onChange={setHours} />
           </Field>
           <Field label="Skill needed">
-            <select value={skill} disabled={!canEdit} onChange={(e) => setSkill(e.target.value as Skill)} className={fieldClass}>
+            <Select value={skill} disabled={!canEdit} onChange={(e) => setSkill(e.target.value as Skill)} className={fieldClass}>
               {SKILL_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Bay needed">
-            <select value={bayType} disabled={!canEdit} onChange={(e) => setBayType(e.target.value as BayType)} className={fieldClass}>
+            <Select value={bayType} disabled={!canEdit} onChange={(e) => setBayType(e.target.value as BayType)} className={fieldClass}>
               {BAY_TYPES.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
-            </select>
+            </Select>
           </Field>
         </div>
         <div>
@@ -497,5 +502,64 @@ function TemplateSheet({ template, canEdit, onClose }: { template: ServiceTempla
         <ActionError error={save.error ?? remove.error} />
       </form>
     </Sheet>
+  )
+}
+
+// ---- Items list ------------------------------------------------------------------------------------
+
+const KIND_LABEL: Record<CatalogueItem['kind'], string> = { part: 'Part', labour: 'Labour', charge: 'Charge' }
+
+/** Parts, labour and charges that can go on a job as lines. Read only: they come from the back office item list. */
+function ItemsTab() {
+  const items = useItems()
+  const [query, setQuery] = useState('')
+  return (
+    <DataView query={items} isEmpty={(list) => list.length === 0} empty={<EmptyState title="No items">The items list is empty.</EmptyState>}>
+      {(list) => {
+        const shown = query.trim() ? list.filter((i) => matchesItem(i, query)) : list
+        return (
+          <div className="space-y-4">
+            <ReadOnlyNote>
+              Items come from the back office item list and are read only here. Staff add them to a booking for repairs and one off work.
+              Labour is priced per hour. A part's fitting labour is only a suggestion and can be changed on the booking.
+            </ReadOnlyNote>
+            <input
+              className={fieldClass}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by part number, name or class"
+              aria-label="Search items"
+            />
+            <Card className="overflow-hidden">
+              <ul className="divide-y">
+                {shown.map((i) => {
+                  const fitting = i.fitting && list.find((x) => x.id === i.fitting!.itemId)
+                  return (
+                    <li key={i.id} className="flex min-h-16 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2">
+                      <span className="hidden w-16 shrink-0 text-sm font-semibold text-muted-foreground sm:block">{KIND_LABEL[i.kind]}</span>
+                      <span className="min-w-48 flex-1">
+                        <span className="block text-lg font-semibold">{i.name}</span>
+                        <span className="block text-sm text-muted-foreground">
+                          <span className="sm:hidden">{KIND_LABEL[i.kind]}, </span>
+                          {i.code}, {i.category}
+                          {i.standardHours ? `, ${formatHours(i.standardHours)}` : ''}
+                          {fitting ? `. Fitting: ${fitting.code}, ${formatHours(i.fitting!.hours)}` : ''}
+                        </span>
+                      </span>
+                      <span className="tabular ml-auto shrink-0 text-right font-semibold">
+                        {formatMoney(i.unitCents + gstOf(i.unitCents))}
+                        <span className="block text-sm font-normal text-muted-foreground">{i.unit === 'hour' ? 'an hour' : i.unit === 'litre' ? 'a litre' : 'each'}, inc GST</span>
+                      </span>
+                      <ActiveBadge active={i.active} />
+                    </li>
+                  )
+                })}
+                {shown.length === 0 && <li className="px-4 py-6 text-muted-foreground">Nothing matches "{query}".</li>}
+              </ul>
+            </Card>
+          </div>
+        )
+      }}
+    </DataView>
   )
 }

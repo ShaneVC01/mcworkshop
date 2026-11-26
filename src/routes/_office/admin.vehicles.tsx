@@ -13,6 +13,7 @@ import { ActiveBadge, ReadOnlyNote, Section } from '@/features/admin/admin-bits'
 import { formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { LibraryFilters, LibraryPage, LibraryVehicle } from '@/types'
+import { Select } from '@/components/ui/fields'
 
 export const Route = createFileRoute('/_office/admin/vehicles')({
   beforeLoad: () => {
@@ -186,13 +187,13 @@ function Filters({
           className={cn(selectClass, 'pl-10')}
         />
       </label>
-      <select aria-label="Make" value={filters.makeId} onChange={(e) => change({ makeId: e.target.value, modelId: '' })} className={cn(selectClass, '@3xl:col-span-4')}>
+      <Select aria-label="Make" value={filters.makeId} onChange={(e) => change({ makeId: e.target.value, modelId: '' })} className={cn(selectClass, '@3xl:col-span-4')}>
         <option value="">All makes</option>
         {page.facets.makes.filter((m) => m.activeModels > 0 || m.id === filters.makeId).map((m) => (
           <option key={m.id} value={m.id}>{m.name} ({m.activeModels})</option>
         ))}
-      </select>
-      <select
+      </Select>
+      <Select
         aria-label="Model"
         value={filters.modelId}
         disabled={!filters.makeId}
@@ -201,26 +202,26 @@ function Filters({
       >
         <option value="">{filters.makeId ? 'All models' : 'Choose a make first'}</option>
         {page.facets.models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-      </select>
-      <select aria-label="Type of vehicle" value={filters.vehicleClass} onChange={(e) => change({ vehicleClass: e.target.value })} className={cn(selectClass, '@3xl:col-span-3')}>
+      </Select>
+      <Select aria-label="Type of vehicle" value={filters.vehicleClass} onChange={(e) => change({ vehicleClass: e.target.value })} className={cn(selectClass, '@3xl:col-span-3')}>
         <option value="">All types</option>
         {page.facets.classes.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
         <option value="none">Type not set</option>
-      </select>
-      <select aria-label="Fuel" value={filters.fuel} onChange={(e) => change({ fuel: e.target.value })} className={cn(selectClass, '@3xl:col-span-3')}>
+      </Select>
+      <Select aria-label="Fuel" value={filters.fuel} onChange={(e) => change({ fuel: e.target.value })} className={cn(selectClass, '@3xl:col-span-3')}>
         <option value="">Any fuel</option>
         {page.facets.fuels.map((f) => <option key={f.code} value={f.code}>{f.label}</option>)}
         <option value="none">Fuel not set</option>
-      </select>
-      <select aria-label="Status" value={filters.status} onChange={(e) => change({ status: e.target.value as LibraryFilters['status'] })} className={cn(selectClass, '@3xl:col-span-3')}>
+      </Select>
+      <Select aria-label="Status" value={filters.status} onChange={(e) => change({ status: e.target.value as LibraryFilters['status'] })} className={cn(selectClass, '@3xl:col-span-3')}>
         <option value="active">Active</option>
         <option value="inactive">Inactive</option>
         <option value="all">Active and inactive</option>
-      </select>
-      <select aria-label="Sort by" value={filters.sort} onChange={(e) => change({ sort: e.target.value as LibraryFilters['sort'] })} className={cn(selectClass, '@3xl:col-span-3')}>
+      </Select>
+      <Select aria-label="Sort by" value={filters.sort} onChange={(e) => change({ sort: e.target.value as LibraryFilters['sort'] })} className={cn(selectClass, '@3xl:col-span-3')}>
         <option value="name">Sort A to Z</option>
         <option value="popular">Most vehicles first</option>
-      </select>
+      </Select>
     </div>
   )
 }

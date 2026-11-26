@@ -226,3 +226,66 @@ SELECT t.id, t.type, BUILTIN.DF(t.status) AS status_name, TO_CHAR(t.createddate,
 -- e2e_sysnotes (17/11/2026 16:08, 0 rows)
 SELECT n.recordtypeid, n.recordid, TO_CHAR(n.date,'DD/MM/YYYY HH24:MI') AS at, BUILTIN.DF(n.context) AS context_name, n.type, n.field, BUILTIN.DF(n.role) AS role_name FROM systemnote n WHERE n.recordid IN (352437,386557,389822,391047,391051,391052,391055,391056,391057,391074,391076,391093,391095,391097,391114,391115,391224,391225,391226,391241,391242,391243,391244,391247,391248,391250,391252,391253,391257,391264,391268,391270,391271,391275,391276,391286,391288,391290) AND n.date >= SYSDATE - 30;
 
+-- tr_asset (24/11/2026 15:53, 1 rows)
+SELECT a.id, a.name, TO_CHAR(a.created,'DD/MM/YYYY HH24:MI') AS created_at, TO_CHAR(a.lastmodified,'DD/MM/YYYY HH24:MI') AS modified_at, BUILTIN.DF(a.owner) AS created_by, a.custrecord_nx_asset_customer AS customer_id, BUILTIN.DF(a.custrecord_nxc_na_created_from) AS created_from, TO_CHAR(a.custrecord_ajg_next_service_date,'DD/MM/YYYY') AS next_service, BUILTIN.DF(a.custrecord_nxc_na_fueltype) AS fuel FROM customrecord_nx_asset a WHERE UPPER(a.name) LIKE '%101TXC%';
+
+-- tr_customer (24/11/2026 15:54, 1 rows)
+SELECT c.id, c.entityid AS customer_no, TO_CHAR(c.datecreated,'DD/MM/YYYY HH24:MI') AS created_at, TO_CHAR(c.lastmodifieddate,'DD/MM/YYYY HH24:MI') AS modified_at, BUILTIN.DF(c.entitystatus) AS status, BUILTIN.DF(c.leadsource) AS source, BUILTIN.DF(c.salesrep) AS sales_rep, TO_CHAR(c.firstorderdate,'DD/MM/YYYY') AS first_order, TO_CHAR(c.firstsaledate,'DD/MM/YYYY') AS first_sale FROM customer c WHERE c.id = 922380;
+
+-- tr_cases (24/11/2026 15:54, 3 rows)
+SELECT c.id, c.casenumber, TO_CHAR(c.createddate,'DD/MM/YYYY HH24:MI') AS created_at, TO_CHAR(c.lastmodifieddate,'DD/MM/YYYY HH24:MI') AS modified_at, BUILTIN.DF(c.status) AS status_name, BUILTIN.DF(c.category) AS job_type, BUILTIN.DF(c.assigned) AS assigned, c.custevent_nx_case_transaction AS so_id, c.custevent_created_from_quote AS from_quote, c.custevent_odometer_reading AS odometer, TO_CHAR(c.startdate,'DD/MM/YYYY') AS start_date, TO_CHAR(c.enddate,'DD/MM/YYYY') AS end_date FROM supportcase c WHERE c.custevent_nx_case_asset = 37924;
+
+-- tr_tasks (24/11/2026 15:54, 6 rows)
+SELECT t.id, t.supportcase, t.status, BUILTIN.DF(t.assigned) AS assigned, BUILTIN.DF(t.owner) AS created_by, BUILTIN.DF(t.custevent_nx_task_type) AS task_type_name, BUILTIN.DF(t.custevent_nxc_task_result) AS result_name, TO_CHAR(t.createddate,'DD/MM/YYYY HH24:MI') AS created_at, TO_CHAR(t.lastmodifieddate,'DD/MM/YYYY HH24:MI') AS modified_at, TO_CHAR(t.completeddate,'DD/MM/YYYY HH24:MI') AS completed_at, TO_CHAR(t.startdate,'DD/MM/YYYY') AS start_date, t.custevent_nx_start_time, t.custevent_nx_end_time, t.custevent_nxc_task_dailyestimatedhours AS est_hours FROM task t WHERE t.supportcase IN (1368090,1368091,1376222);
+
+-- tr_timebills (24/11/2026 15:54, 1 rows)
+SELECT b.id, b.custcol_nx_case, b.custcol_nx_task, BUILTIN.DF(b.employee) AS employee_name, b.hours, b.isbillable, TO_CHAR(b.trandate,'DD/MM/YYYY') AS work_date, TO_CHAR(b.createddate,'DD/MM/YYYY HH24:MI') AS created_at, b.custcol_nxc_start_time, b.custcol_nxc_finish_time FROM timebill b WHERE b.custcol_nx_case IN (1368090,1368091,1376222);
+
+-- tr_trans (24/11/2026 15:54, 1 rows)
+SELECT t.id, t.type, t.tranid, BUILTIN.DF(t.status) AS status_name, TO_CHAR(t.trandate,'DD/MM/YYYY') AS tran_date, TO_CHAR(t.createddate,'DD/MM/YYYY HH24:MI') AS created_at, TO_CHAR(t.lastmodifieddate,'DD/MM/YYYY HH24:MI') AS modified_at, BUILTIN.DF(t.employee) AS employee_name, t.foreigntotal AS total, t.source FROM transaction t WHERE t.entity = 922380;
+
+-- tr_links (24/11/2026 15:55, 9 rows)
+SELECT l.previousdoc, l.nextdoc, l.linktype FROM nexttransactionlink l WHERE l.previousdoc IN (387969,389006,392194) OR l.nextdoc IN (387969,389006,392194);
+
+-- tr_links2 (24/11/2026 15:55, 6 rows)
+SELECT l.previousdoc, l.nextdoc, l.linktype FROM nexttransactionlink l WHERE l.previousdoc IN (392196,392198,392199) OR l.nextdoc IN (392196,392198,392199);
+
+-- tr_docs (24/11/2026 15:55, 10 rows)
+SELECT t.id, t.type, t.tranid, BUILTIN.DF(t.status) AS status_name, TO_CHAR(t.trandate,'DD/MM/YYYY') AS tran_date, TO_CHAR(t.createddate,'DD/MM/YYYY HH24:MI') AS created_at, TO_CHAR(t.lastmodifieddate,'DD/MM/YYYY HH24:MI') AS modified_at, BUILTIN.DF(t.employee) AS employee_name, t.entity, t.foreigntotal AS total FROM transaction t WHERE t.id IN (387969,389006,389008,389009,389010,389029,392194,392196,392198,392199,393110);
+
+-- tr_paycheck (24/11/2026 15:55, 5 rows)
+SELECT t.id, t.type, t.tranid, BUILTIN.DF(t.status) AS status_name, TO_CHAR(t.trandate,'DD/MM/YYYY') AS tran_date, TO_CHAR(t.createddate,'DD/MM/YYYY HH24:MI') AS created_at, t.entity, t.foreigntotal AS total FROM transaction t WHERE t.entity IN (922380,930878,924505) AND t.type NOT IN ('PurchOrd');
+
+-- tr_unpaid (24/11/2026 15:55, 1 rows)
+SELECT t.id, t.tranid, t.foreignamountunpaid AS unpaid, t.foreignamountpaid AS paid, TO_CHAR(t.duedate,'DD/MM/YYYY') AS due_date, BUILTIN.DF(t.terms) AS terms FROM transaction t WHERE t.id = 392199;
+
+-- tr_projects (24/11/2026 15:55, 2 rows)
+SELECT j.id, j.entityid AS project_no, TO_CHAR(j.datecreated,'DD/MM/YYYY HH24:MI') AS created_at, BUILTIN.DF(j.entitystatus) AS status, j.parent FROM job j WHERE j.id IN (930878,924505);
+
+-- tr_inv_lines (24/11/2026 15:55, 16 rows)
+SELECT tl.linesequencenumber AS seq, BUILTIN.DF(tl.item) AS item_name, tl.quantity, tl.foreignamount AS amount, tl.itemtype FROM transactionline tl WHERE tl.transaction = 392199 AND tl.mainline = 'F' AND tl.taxline = 'F' ORDER BY tl.linesequencenumber;
+
+-- gap_asset (24/11/2026 16:20, 1 rows)
+SELECT a.id, CASE WHEN UPPER(REPLACE(a.custrecord_nx_asset_serial,' ','')) = '101TXC' THEN 1 ELSE 0 END AS rego_in_serial, BUILTIN.DF(a.custrecord_nx_asset_type) AS asset_type, BUILTIN.DF(a.custrecord_nx_asset_region) AS region, BUILTIN.DF(a.custrecord_nxc_na_brandmake) AS make, BUILTIN.DF(a.custrecord_nxc_na_model) AS model FROM customrecord_nx_asset a WHERE a.id = 37924;
+
+-- gap_asset2 (24/11/2026 16:20, 1 rows)
+SELECT a.id, CASE WHEN UPPER(REPLACE(a.custrecord_nx_asset_serial,' ','')) = '101TXC' THEN 'yes' ELSE 'no' END AS flag_a FROM customrecord_nx_asset a WHERE a.id = 37924;
+
+-- gap_case (24/11/2026 16:20, 1 rows)
+SELECT c.id, BUILTIN.DF(c.category) AS category, BUILTIN.DF(c.custevent_nx_case_type) AS nx_case_type, BUILTIN.DF(c.custevent_ajg_deparmtnet_for_so) AS department, BUILTIN.DF(c.custevent_nxc_job_subtype) AS job_subtype, BUILTIN.DF(c.profile) AS profile, BUILTIN.DF(c.subsidiary) AS subsidiary, c.custevent_nxc_est_hours AS est_hours, c.custevent_sms_job_confirm AS sms, BUILTIN.DF(c.origin) AS origin FROM supportcase c WHERE c.id = 1376222;
+
+-- item_types (24/11/2026 16:55, 8 rows)
+SELECT i.itemtype, COUNT(*) AS n FROM item i WHERE i.isinactive = 'F' GROUP BY i.itemtype;
+
+-- item_labour (24/11/2026 16:55, 29 rows)
+SELECT i.id, i.itemid, i.displayname, i.itemtype, BUILTIN.DF(i.class) AS class_name, BUILTIN.DF(i.department) AS dept, i.isinactive FROM item i WHERE i.itemtype IN ('NonInvtPart','OthCharge','Service') AND (UPPER(i.itemid) LIKE 'LAB%' OR UPPER(i.itemid) LIKE 'WAT%' OR i.itemid IN ('TWR - TOXIC WASTE REMOVAL','WC WORKSHOP CONSUMABLES','FREIGHT','MISC'));
+
+-- item_group_members (24/11/2026 16:55, 8 rows)
+SELECT BUILTIN.DF(m.parentitem) AS group_name, BUILTIN.DF(m.item) AS member, m.quantity, m.linenumber FROM itemmember m WHERE m.parentitem IN (SELECT id FROM item WHERE itemtype = 'Group' AND (UPPER(itemid) LIKE '4WD VEHICLE SERVICE (DIESEL)%' OR UPPER(displayname) LIKE '4WD VEHICLE SERVICE (DIESEL)%')) ORDER BY m.linenumber;
+
+-- item_part_probe3 (24/11/2026 16:55, 8 rows)
+SELECT i.id, i.itemid, i.displayname, i.itemtype, BUILTIN.DF(i.class) AS class_name FROM item i WHERE i.itemid IN ('PSA561','PCF631A','KE75-N1C8','Z929','6577WOR','DBA2716E','MOTOR OIL','OIL FILTER');
+
+-- item_class_counts (24/11/2026 16:55, 90 rows)
+SELECT BUILTIN.DF(i.class) AS class_name, COUNT(*) AS n FROM item i WHERE i.isinactive = 'F' AND i.itemtype = 'InvtPart' GROUP BY BUILTIN.DF(i.class) ORDER BY 2 DESC;
+

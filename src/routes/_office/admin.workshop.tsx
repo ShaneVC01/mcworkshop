@@ -14,6 +14,7 @@ import { useAction, useBays, useTechnicians, useWorkshopSettings } from '@/data/
 import { MoneyInput, NumberInput, ReadOnlyNote, Section } from '@/features/admin/admin-bits'
 import { dayKey, formatDate, formatDayLong, formatHours, formatMoney, gstOf } from '@/lib/format'
 import type { Bay, BayType, WorkshopSettings } from '@/types'
+import { DateField, Select, TimeField } from '@/components/ui/fields'
 
 export const Route = createFileRoute('/_office/admin/workshop')({
   beforeLoad: () => {
@@ -51,7 +52,10 @@ function HoursAndTargets({ settings }: { settings: WorkshopSettings }) {
   const [applied, setApplied] = useState<number | null>(null)
   const dirty = JSON.stringify({ ...form, closedDays: 0 }) !== JSON.stringify({ ...settings, closedDays: 0 })
   const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3))
-  const shiftHours = Math.max(0, (toMin(form.closeTime) - toMin(form.openTime) - form.breakMinutes) / 60)
+  const breakTotal = form.breaks.reduce((sum, b) => sum + Math.max(0, toMin(b.to) - toMin(b.from)), 0)
+  const shiftHours = Math.max(0, (toMin(form.closeTime) - toMin(form.openTime) - breakTotal) / 60)
+  const setBreak = (i: number, patch: Partial<{ from: string; to: string }>) =>
+    setForm({ ...form, breaks: form.breaks.map((b, j) => (j === i ? { ...b, ...patch } : b)) })
   const technicians = useTechnicians()
   const working = technicians.data?.data.filter((t) => t.active).length ?? 0
 
@@ -64,19 +68,38 @@ function HoursAndTargets({ settings }: { settings: WorkshopSettings }) {
         className="grid gap-4 @lg:grid-cols-2 @3xl:grid-cols-3"
         onSubmit={(e) => {
           e.preventDefault()
-          const { openTime, closeTime, breakMinutes, dailyTargetHours, labourRateCents } = form
-          void save.run({ openTime, closeTime, breakMinutes, dailyTargetHours, labourRateCents }).catch(() => undefined)
+          const { openTime, closeTime, breaks, gapMinutes, dailyTargetHours, labourRateCents } = form
+          void save.run({ openTime, closeTime, breaks, gapMinutes, dailyTargetHours, labourRateCents }).catch(() => undefined)
         }}
       >
         <Field label="Opens">
-          <input type="time" value={form.openTime} onChange={(e) => setForm({ ...form, openTime: e.target.value })} className={fieldClass} />
+          <TimeField aria-label="Opens" value={form.openTime} onChange={(openTime) => setForm({ ...form, openTime })} />
         </Field>
         <Field label="Closes">
-          <input type="time" value={form.closeTime} onChange={(e) => setForm({ ...form, closeTime: e.target.value })} className={fieldClass} />
+          <TimeField aria-label="Closes" value={form.closeTime} onChange={(closeTime) => setForm({ ...form, closeTime })} />
         </Field>
-        <Field label="Break, minutes" hint={`${formatHours(shiftHours)} of working time a day.`}>
-          <NumberInput label="Break in minutes" digits={0} value={form.breakMinutes} onChange={(v) => setForm({ ...form, breakMinutes: v ?? 0 })} />
+        <Field label="Gap between vehicles, minutes" hint="The least time between one vehicle finishing and the next starting for the same mechanic.">
+          <NumberInput label="Gap between vehicles in minutes" digits={0} value={form.gapMinutes} onChange={(v) => setForm({ ...form, gapMinutes: v ?? 0 })} />
         </Field>
+        <fieldset className="space-y-2 @lg:col-span-2 @3xl:col-span-3">
+          <legend className="font-semibold">Breaks</legend>
+          <p className="text-sm text-muted-foreground">
+            No vehicle starts inside a break. Work that runs into one carries on after it. {formatHours(shiftHours)} of working time a day.
+          </p>
+          {form.breaks.map((b, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2">
+              <TimeField aria-label={`Break ${i + 1} starts`} value={b.from} onChange={(from) => setBreak(i, { from })} from={form.openTime} to={form.closeTime} className="w-40" />
+              <span>to</span>
+              <TimeField aria-label={`Break ${i + 1} ends`} value={b.to} onChange={(to) => setBreak(i, { to })} from={form.openTime} to={form.closeTime} className="w-40" />
+              <Button type="button" variant="ghost" onClick={() => setForm({ ...form, breaks: form.breaks.filter((_, j) => j !== i) })}>
+                Remove
+              </Button>
+            </div>
+          ))}
+          <Button type="button" variant="outline" onClick={() => setForm({ ...form, breaks: [...form.breaks, { from: '12:00', to: '12:30' }] })}>
+            Add a break
+          </Button>
+        </fieldset>
         <Field label="Daily target, hours per mechanic" hint={`About ${formatHours(form.dailyTargetHours * working)} a day across ${working} mechanics.`}>
           <NumberInput label="Daily target in hours" value={form.dailyTargetHours} onChange={(v) => setForm({ ...form, dailyTargetHours: v ?? 0 })} />
         </Field>
@@ -170,11 +193,11 @@ function BaySheet({ bay, onClose }: { bay: Bay | null; onClose: () => void }) {
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Bay 5" className={fieldClass} />
         </Field>
         <Field label="Type">
-          <select value={type} onChange={(e) => setType(e.target.value as BayType)} className={fieldClass}>
+          <Select value={type} onChange={(e) => setType(e.target.value as BayType)} className={fieldClass}>
             {(Object.keys(BAY_TYPE_LABEL) as BayType[]).map((t) => (
               <option key={t} value={t}>{BAY_TYPE_LABEL[t]}</option>
             ))}
-          </select>
+          </Select>
         </Field>
         <ActionError error={save.error} />
       </form>
@@ -211,7 +234,7 @@ function ClosedDays({ settings }: { settings: WorkshopSettings }) {
         }}
       >
         <Field label="Date">
-          <input type="date" value={day} onChange={(e) => setDay(e.target.value)} className={fieldClass} />
+          <DateField aria-label="Closed day" value={day} onChange={setDay} min={dayKey()} />
         </Field>
         <Field label="Reason">
           <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Christmas Day" className={fieldClass} />

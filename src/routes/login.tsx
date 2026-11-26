@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
 import { homeFor, ROLE_LABEL, setSession } from '@/auth/session'
+import { BrandMark } from '@/components/shell/brand-mark'
 import { DataView } from '@/components/states'
 import { useStaff } from '@/data/hooks'
 import type { Role, StaffUser } from '@/types'
@@ -21,7 +22,7 @@ function LoginPage() {
   return (
     <div className="flex min-h-dvh flex-col bg-chrome">
       <header className="px-6 pt-[max(2.5rem,env(safe-area-inset-top))] pb-8 text-center">
-        <img src="/logo-mccormacks.png" alt="McCormacks 4WD" className="mx-auto h-10 w-auto" />
+        <BrandMark className="mx-auto w-fit items-center text-[25px]" />
         <h1 className="mt-6 text-3xl text-white">Who is working today?</h1>
         <p className="mt-1 text-chrome-foreground">Choose your name to open the workshop.</p>
       </header>

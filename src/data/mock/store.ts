@@ -4,6 +4,7 @@
  * with Supabase queries and keep the same signatures.
  */
 import { getSession } from '@/auth/session'
+import { setWorkshopRules } from '@/lib/capacity'
 import { nowIso, setClosedDays } from '@/lib/format'
 import type { ActivityType, Id, Result, SyncLogEntry, SyncState } from '@/types'
 import { createSeed, DB_VERSION, type Database } from './seed'
@@ -32,6 +33,7 @@ const channel = typeof BroadcastChannel === 'undefined' ? undefined : new Broadc
 /** Settings that plain functions in src/lib read, such as closed days. Runs on every load and commit. */
 function applyRuntime(database: Database) {
   setClosedDays(database.settings.closedDays.map((d) => d.day))
+  setWorkshopRules(database.settings.breaks ?? [], database.settings.gapMinutes ?? 0)
   return database
 }
 

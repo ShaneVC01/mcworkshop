@@ -5,7 +5,8 @@ import { useSession } from '@/auth/session'
 import { CapacityBar, CapacityFigures, Card, freeLabel, JobTile } from '@/components/domain/job-bits'
 import { PageHeader } from '@/components/shell/app-shell'
 import { DataView, EmptyState, Skeleton } from '@/components/states'
-import { useTodaySummary } from '@/data/hooks'
+import { useBookings, useTodaySummary } from '@/data/hooks'
+import { CloseOutPanel } from '@/features/workshop/close-out'
 import { formatDayLong, formatHours, workingToday } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { TodaySummary } from '@/types'
@@ -18,7 +19,7 @@ const tiles: { key: keyof TodaySummary['counts']; label: string; colour: string 
   { key: 'approval', label: 'Need approval', colour: 'var(--status-approval)' },
   { key: 'parts', label: 'Awaiting parts', colour: 'var(--status-parts)' },
   { key: 'blocked', label: 'Blocked', colour: 'var(--status-blocked)' },
-  { key: 'ready', label: 'Complete', colour: 'var(--foreground)' },
+  { key: 'ready', label: 'Finishing', colour: 'var(--foreground)' },
 ]
 
 function TodayPage() {
@@ -82,6 +83,11 @@ function TodayPage() {
               ))}
             </ul>
 
+            <section aria-labelledby="finishing" className="space-y-3">
+              <h2 id="finishing" className="text-xl">Check, invoice and collect</h2>
+              <FinishingToday />
+            </section>
+
             <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_22rem]">
               <section>
                 <h2 className="mb-3 text-xl">Needs attention</h2>
@@ -141,5 +147,15 @@ function TodayPage() {
         )}
       </DataView>
     </div>
+  )
+}
+
+/** Vehicles finished but not yet paid for: the workshop controller checks them, reception invoices and collects payment. */
+function FinishingToday() {
+  const bookings = useBookings()
+  return (
+    <DataView query={bookings} loading={<Skeleton className="h-40" />}>
+      {(list) => <CloseOutPanel jobs={list} emptyText="Every finished vehicle is paid for." />}
+    </DataView>
   )
 }

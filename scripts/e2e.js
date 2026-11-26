@@ -23,22 +23,35 @@ async (page) => {
   // 1 to 7: advisor books 923XYZ for a 120,000 km service
   await as(advisor, '/bookings/new')
   const t0 = Date.now()
-  await page.getByPlaceholder('Rego, customer name or mobile').fill('923XYZ')
-  await page.getByRole('button', { name: /LandCruiser 79/ }).first().click()
-  await page.getByRole('button', { name: /120,000 km major service/ }).click()
+  await page.getByPlaceholder('Rego, mobile or customer name').fill('923XYZ')
+  await page.getByRole('button', { name: /Book 923XYZ/ }).first().click()
+  await page.getByRole('button', { name: /150,000 km service/ }).click()
+  await page.getByRole('button', { name: /Add to booking/ }).first().click()
+  log.push('booked as: ' + (await page.getByRole('button', { name: 'Service', exact: true }).getAttribute('aria-pressed')))
   const first = page.getByRole('radio').first()
   await first.waitFor()
   log.push('slot offered: ' + (await first.innerText()).replace(/\s+/g, ' '))
   await page.getByRole('button', { name: 'Confirm booking' }).click()
   await page.waitForURL(/calendar/)
   log.push(`booking made in ${((Date.now() - t0) / 1000).toFixed(1)} s (scripted)`)
-  await page.getByRole('button', { name: /923XYZ/ }).first().waitFor()
+  await page.getByRole('button', { name: /923 ?XYZ/ }).first().waitFor()
   log.push('8: booking is on the calendar')
 
   let data = await db()
-  const booking = data.bookings.filter((b) => b.vehicleId === 'v1').sort((a, b) => b.number.localeCompare(a.number))[0]
+  let booking = data.bookings.filter((b) => b.vehicleId === 'v1').sort((a, b) => b.number.localeCompare(a.number))[0]
+  log.push(`booked ${booking.number} with no mechanic: ${booking.technicianIds.length === 0}, ${booking.estimatedLabourHours} h`)
+
+  // The vehicle arrives and the workshop controller assigns a mechanic
+  await as({ id: 'u-craig', name: 'Craig Hinckley', role: 'controller' }, `/bookings/${booking.id}`)
+  await page.getByRole('button', { name: /^Vehicle arrived/ }).first().click()
+  await page.getByRole('button', { name: /^Assign/ }).first().click()
+  const assign = page.getByRole('dialog').getByRole('button', { name: /^Assign (anyway )?to / })
+  await assign.click()
+  await page.getByRole('dialog').waitFor({ state: 'detached' })
+  data = await db()
+  booking = data.bookings.find((b) => b.id === booking.id)
   const mechanic = data.staff.find((u) => u.technicianId === booking.technicianIds[0])
-  log.push(`booked ${booking.number} with ${mechanic.name}, ${booking.estimatedLabourHours} h`)
+  log.push(`arrived and assigned to ${mechanic.name}`)
 
   // 9 to 12: mechanic starts, completes checklist, reports brake pads with photo
   await as(mechanic, '/mechanic')
@@ -108,9 +121,9 @@ async (page) => {
 
   // 19 and 20: board and vehicle timeline
   await as(advisor, '/workshop')
-  const column = page.getByRole('region', { name: 'Complete' })
+  const column = page.getByRole('region', { name: 'To check' })
   await column.getByText('923 XYZ').waitFor()
-  log.push('19: board shows it under Complete: ' + (await column.getByText('Tech complete').count() > 0))
+  log.push('19: board shows it under To check: ' + (await column.getByText('Work complete').count() > 0))
   await page.goto(base + '/vehicles/v1')
   await page.getByText('Front brake pads').first().waitFor()
   log.push('20: vehicle timeline shows the visit and finding')

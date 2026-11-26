@@ -14,6 +14,7 @@ import { ActiveBadge, Section } from '@/features/admin/admin-bits'
 import { SKILL_OPTIONS } from '@/features/admin/labels'
 import { formatHours } from '@/lib/format'
 import type { Role, Skill, StaffUser, Technician, WorkshopSettings } from '@/types'
+import { Select, TimeField } from '@/components/ui/fields'
 
 export const Route = createFileRoute('/_office/admin/users')({
   beforeLoad: () => {
@@ -174,11 +175,11 @@ function PersonSheet({
           <input value={title} onChange={(e) => setTitle(e.target.value)} className={fieldClass} />
         </Field>
         <Field label="Role" hint="Decides what they can see and do. Change what each role can do under Roles and access.">
-          <select value={role} onChange={(e) => setRole(e.target.value as Role)} className={fieldClass}>
+          <Select value={role} onChange={(e) => setRole(e.target.value as Role)} className={fieldClass}>
             {ROLES.map((r) => (
               <option key={r} value={r}>{ROLE_LABEL[r]}</option>
             ))}
-          </select>
+          </Select>
         </Field>
         <label className="flex min-h-touch items-center gap-3">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="size-5 accent-[var(--primary)]" />
@@ -223,10 +224,10 @@ function PersonSheet({
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <Field label="Starts">
-                  <input type="time" value={shiftStart} onChange={(e) => setShiftStart(e.target.value)} className={fieldClass} />
+                  <TimeField aria-label="Shift starts" value={shiftStart} onChange={setShiftStart} />
                 </Field>
                 <Field label="Finishes">
-                  <input type="time" value={shiftEnd} onChange={(e) => setShiftEnd(e.target.value)} className={fieldClass} />
+                  <TimeField aria-label="Shift ends" value={shiftEnd} onChange={setShiftEnd} />
                 </Field>
                 <Field label="Break, min">
                   <input inputMode="numeric" value={breakMinutes} onChange={(e) => setBreakMinutes(e.target.value)} className={fieldClass} />

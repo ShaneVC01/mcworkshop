@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { CalendarDays, Car, ChartColumn, ClipboardList, Columns3, NotebookPen, Settings } from 'lucide-react'
+import { CalendarDays, Car, ChartColumn, ClipboardList, Columns3, NotebookPen, PackageSearch, Settings } from 'lucide-react'
 import { useCanAdmin } from '@/auth/permissions'
 import { getSession } from '@/auth/session'
 import { AppShell, type NavItem } from '@/components/shell/app-shell'
@@ -19,6 +19,7 @@ const nav: NavItem[] = [
   { to: '/bookings', label: 'Bookings', icon: NotebookPen },
   { to: '/vehicles', label: 'Vehicles', icon: Car },
   { to: '/workshop', label: 'Workshop', icon: Columns3 },
+  { to: '/parts', label: 'Parts', icon: PackageSearch },
   { to: '/reports', label: 'Reports', icon: ChartColumn },
 ]
 

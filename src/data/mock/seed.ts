@@ -4,26 +4,9 @@
  * Bookings are laid out around the current working day so the demo always looks live.
  */
 import { defaultRolePermissions } from '@/auth/default-permissions'
-import { addDays, addMinutes, addWorkingDays, at, nowIso, workingToday } from '@/lib/format'
-import type {
-  ActivityEvent,
-  Bay,
-  Booking,
-  ChecklistTemplateItem,
-  Customer,
-  JobCard,
-  JobStatus,
-  RegoState,
-  RolePermissions,
-  ServiceProfile,
-  ServiceTemplate,
-  StaffUser,
-  SyncLogEntry,
-  Technician,
-  Vehicle,
-  VehicleModel,
-  WorkshopSettings,
-} from '@/types'
+import { addDays, addMinutes, addWorkingDays, at, dayKey, nowIso, workingToday } from '@/lib/format'
+import { ITEMS } from './items'
+import type { ActivityEvent, Bay, Booking, CatalogueItem, ChecklistTemplateItem, Customer, JobCard, JobStatus, PartOrder, RegoState, RolePermissions, ServiceProfile, ServiceTemplate, StaffUser, SyncLogEntry, Technician, Vehicle, VehicleModel, WorkshopSettings } from '@/types'
 
 export const LABOUR_RATE_CENTS = 16500
 
@@ -34,6 +17,9 @@ export interface Database {
   technicians: Technician[]
   bays: Bay[]
   templates: ServiceTemplate[]
+  /** Items list: parts, labour and charges that can go on a job as lines. */
+  items: CatalogueItem[]
+  partOrders: PartOrder[]
   /** Vehicle library: the makes and models the workshop services. */
   library: VehicleModel[]
   /** Service profiles: what a service needs on one make and model. */
@@ -49,7 +35,7 @@ export interface Database {
   counters: { booking: number; job: number; id: number }
 }
 
-export const DB_VERSION = 8
+export const DB_VERSION = 16
 
 const synced = () => ({ status: 'synced' as const, lastSyncedAt: nowIso() })
 
@@ -249,7 +235,7 @@ const profiles: ServiceProfile[] = [
 ]
 
 function defaultSettings(): WorkshopSettings {
-  return { openTime: '07:00', closeTime: '15:30', breakMinutes: 30, dailyTargetHours: 6, labourRateCents: LABOUR_RATE_CENTS, closedDays: [] }
+  return { openTime: '07:00', closeTime: '15:30', breakMinutes: 30, breaks: [{ from: '11:30', to: '12:00' }], gapMinutes: 15, dailyTargetHours: 6, labourRateCents: LABOUR_RATE_CENTS, closedDays: [] }
 }
 
 const bays: Bay[] = [
@@ -313,14 +299,14 @@ const rows: Row[] = [
   // tech: 0 Ben, 1 Dale, 2 Jared, -1 not yet assigned. Each has an 8 hour day (07:00 to 15:30, 30 minute break).
   // previous working day, all closed
   { day: -1, tech: 0, start: '07:00', template: 'svc-40k', vehicle: 1 },
-  { day: -1, tech: 0, start: '11:00', template: 'svc-10k', vehicle: 5 },
+  { day: -1, tech: 0, start: '11:00', template: 'svc-10k', vehicle: 5, status: 'READY_FOR_CUSTOMER' },
   { day: -1, tech: 1, start: '07:30', template: 'rep-bearing', vehicle: 3 },
-  { day: -1, tech: 1, start: '11:00', template: 'diag-elec', vehicle: 2, concern: 'Dash lights flicker when the fridge is running.' },
+  { day: -1, tech: 1, start: '11:00', template: 'diag-elec', vehicle: 2, status: 'READY_TO_INVOICE', concern: 'Dash lights flicker when the fridge is running.' },
   { day: -1, tech: 2, start: '07:00', template: 'acc-fit', vehicle: 4, concern: 'Fit customer supplied light bar and UHF.' },
   { day: -1, tech: 2, start: '11:30', template: 'insp-pretrip', vehicle: 6, concern: 'Heading to Cape York in two weeks.' },
   // today
   { day: 0, tech: 0, start: '07:00', template: 'svc-120k', vehicle: 7, status: 'IN_PROGRESS' },
-  { day: 0, tech: 0, start: '11:00', template: 'rep-brake', vehicle: 8, status: 'CHECKED_IN' },
+  { day: 0, tech: 0, start: '11:00', template: 'rep-brake', vehicle: 8, status: 'READY_FOR_WORK' },
   { day: 0, tech: 0, start: '13:00', template: 'insp-pretrip', vehicle: 14, status: 'CONFIRMED', concern: 'Towing a van to Birdsville next month.' },
   { day: 0, tech: 1, start: '07:00', template: 'svc-40k', vehicle: 13, status: 'TECH_COMPLETE' },
   { day: 0, tech: 1, start: '10:30', template: 'diag-elec', vehicle: 9, status: 'WAITING_APPROVAL', concern: 'Battery light comes on at idle with the headlights on.' },
@@ -416,9 +402,10 @@ export function createSeed(): Database {
     const status: JobStatus = row.status ?? (row.day < 0 ? 'CLOSED' : row.tentative ? 'BOOKED' : 'CONFIRMED')
     number++
     const id = `${number}`
-    const tech = row.tech >= 0 ? technicians[row.tech]! : undefined
+    // A mechanic is only assigned once the vehicle has arrived.
+    const tech = row.tech >= 0 && !['BOOKED', 'CONFIRMED'].includes(status) ? technicians[row.tech]! : undefined
     const built = buildJobParts(template, nextId)
-    const done = ['TECH_COMPLETE', 'QUALITY_CHECK', 'READY_FOR_CUSTOMER', 'CLOSED'].includes(status)
+    const done = ['TECH_COMPLETE', 'QUALITY_CHECK', 'READY_TO_INVOICE', 'READY_FOR_CUSTOMER', 'CLOSED'].includes(status)
     const started = done || ['IN_PROGRESS', 'WAITING_APPROVAL', 'WAITING_PARTS', 'BLOCKED'].includes(status)
 
     const job: JobCard = {
@@ -497,10 +484,59 @@ export function createSeed(): Database {
     description: 'Front pads have about 5 mm left. Check again at the next service.', photos: [],
     approvalStatus: 'not-required', createdAt: history.completedAt!, createdBy: technicians[0]!.name,
   })
-  add({ day: -1, tech: 1, start: '07:30', template: 'svc-40k', vehicle: 0 }, addDays(today, -279))
+  // Quoted on that visit and declined, so the next booking can offer it again.
+  const shocksId = nextId()
+  history.findings.push({
+    id: shocksId, jobId: history.id, title: 'Rear shock absorbers leaking', severity: 'recommended',
+    description: 'Both rear shocks are misting oil. Ride control will get worse with a load on.', photos: [],
+    suggestedAction: 'Replace rear shock absorbers', extraLabourHours: 1.5,
+    approvalStatus: 'declined', createdAt: history.completedAt!, createdBy: technicians[0]!.name,
+  })
+  history.quoteLines.push({
+    id: nextId(), findingId: shocksId, description: 'Replace rear shock absorbers', labourHours: 1.5,
+    labourCents: 1.5 * LABOUR_RATE_CENTS, partsCents: 68000, status: 'declined',
+    sentAt: history.completedAt!, decidedAt: addMinutes(history.completedAt!, 95),
+  })
+  const older = add({ day: -1, tech: 1, start: '07:30', template: 'svc-40k', vehicle: 0 }, addDays(today, -279))
+  older.findings.push({
+    id: nextId(), jobId: older.id, title: 'Wheel alignment out', severity: 'recommended',
+    description: 'Front tyres wearing on the outside edge.', photos: [], suggestedAction: 'Wheel alignment', extraLabourHours: 1,
+    approvalStatus: 'draft', createdAt: older.completedAt!, createdBy: technicians[1]!.name,
+  })
+
+  // Reminders go out two working days ahead. Two in three customers have replied to confirm.
+  const soon = [today, dayFor(1), dayFor(2)]
+  bookings
+    .filter((b) => soon.includes(dayKey(b.startAt)))
+    .forEach((b, i) => {
+      const job = jobs.find((j) => j.id === b.jobId)!
+      if (!['BOOKED', 'CONFIRMED'].includes(job.status)) return
+      b.reminderSentAt = at(addWorkingDays(dayKey(b.startAt), -2) < today ? addDays(today, -1) : addWorkingDays(dayKey(b.startAt), -2), '15:00')
+      if (i % 3 !== 0) b.customerConfirmedAt = addMinutes(b.reminderSentAt, 40 + i * 7)
+    })
+
+  // Specialist parts ordered in for upcoming bookings, one in each state the parts page shows.
+  const partOrders: PartOrder[] = []
+  const orderFor = (vehicle: number, itemId: string, patch: Partial<PartOrder>) => {
+    const item = ITEMS.find((i) => i.id === itemId)!
+    const booking = bookings.find((b) => b.vehicleId === vehicles[vehicle]!.id && dayKey(b.startAt) > today)
+    if (!booking) return
+    const neededBy = dayKey(booking.startAt)
+    partOrders.push({
+      id: nextId(), jobId: booking.jobId, bookingId: booking.id, itemId: item.id, code: item.code, name: item.name, qty: 1,
+      leadTimeDays: item.leadTimeDays ?? 2, status: 'to-order', orderBy: addWorkingDays(neededBy, -(item.leadTimeDays ?? 2)), neededBy,
+      sync: synced(), ...patch,
+    })
+  }
+  orderFor(20, 'i-dba2716e', {})
+  orderFor(20, 'i-db2219', { status: 'ordered', supplier: 'Bendix', orderedAt: addMinutes(at(addDays(today, -2), '09:00'), 0), eta: dayFor(1) })
+  orderFor(3, 'i-cvhilux', { status: 'ordered', supplier: 'Toyota parts', orderedAt: at(addDays(today, -3), '10:15'), eta: dayFor(4) })
+  orderFor(6, 'i-ome-f', { status: 'ordered', supplier: 'ARB', orderedAt: at(addDays(today, -1), '08:40') })
+  orderFor(11, 'i-6pk1873', { status: 'received', supplier: 'Repco', orderedAt: at(addDays(today, -2), '08:00'), eta: today, receivedAt: at(today, '08:30') })
+  orderFor(15, 'i-tyre-at', { wrongPartAt: at(today, '09:10'), note: '265/70R17 delivered instead of 265/65R17.' })
 
   return {
-    version: DB_VERSION, seededFor: today, staff, technicians, bays, templates, library, profiles,
+    version: DB_VERSION, seededFor: today, staff, technicians, bays, templates, items: ITEMS.map((i) => ({ ...i })), partOrders, library, profiles,
     settings: defaultSettings(), rolePermissions: defaultRolePermissions(), customers, vehicles,
     bookings, jobs, activity, outbox: [], counters: { booking: number, job: number, id: 0 },
   }

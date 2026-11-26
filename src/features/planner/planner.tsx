@@ -14,14 +14,18 @@ import { Button } from '@/components/ui/button'
 import { Field, fieldClass, Sheet } from '@/components/ui/sheet'
 import { confirmBooking, rescheduleBooking, type ReschedulePatch } from '@/data/actions'
 import { useAction, useBays, useCapacity, useSchedule, useTechnicians } from '@/data/hooks'
+import { monthDays, monthLabel, shiftMonth, type PlannerView } from './calendar-dates'
+import { DatePicker } from './date-picker'
+import { MonthGrid } from './month-grid'
 import { DAY_END, DAY_START, findConflicts, SNAP_MINUTES, unavailableAllDay, type Conflict } from '@/lib/capacity'
 import {
   addMinutes, addWorkingDays, at, dayKey, formatDayLong, formatDayShort, formatHours, formatTime, fromMinutes,
-  minutesOfDay, mondayOf, toMinutes, workingToday,
+  minutesOfDay, mondayOf, toMinutes,
 } from '@/lib/format'
 import { isFinished, JOB_STATUS_TONE } from '@/lib/job-state'
 import { cn } from '@/lib/utils'
 import type { Bay, CapacitySummary, ScheduledJob, Skill, Technician } from '@/types'
+import { Select } from '@/components/ui/fields'
 
 const SPAN = DAY_END - DAY_START
 const HOURS = Array.from({ length: SPAN / 60 }, (_, i) => DAY_START + i * 60)
@@ -36,7 +40,7 @@ interface PendingMove {
 }
 
 export function Planner({ day, onDayChange }: { day: string; onDayChange: (day: string) => void }) {
-  const [view, setView] = useState<'day' | 'week'>('day')
+  const [view, setView] = useState<PlannerView>('day')
   const [techFilter, setTechFilter] = useState('all')
   const [skillFilter, setSkillFilter] = useState<'all' | Skill>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -46,14 +50,16 @@ export function Planner({ day, onDayChange }: { day: string; onDayChange: (day: 
     const monday = mondayOf(day)
     return [0, 1, 2, 3, 4].map((n) => (n === 0 ? monday : addWorkingDays(monday, n)))
   }, [day])
-  const range = view === 'day' ? [day] : weekDays
+  const month = day.slice(0, 7)
+  const range = useMemo(() => (view === 'day' ? [day] : view === 'week' ? weekDays : monthDays(month)), [view, day, weekDays, month])
 
   const technicians = useTechnicians()
   const bays = useBays()
   const schedule = useSchedule(range[0]!, range.at(-1)!)
   const capacity = useCapacity(range)
   const move = useAction(rescheduleBooking)
-  const canMove = useCan('booking.move')
+  // The calendar is for looking. Vehicles are moved on the workshop's Mechanics view.
+  const canMove = false
   const canOverride = useCan('booking.override-conflict')
   const canBook = useCan('booking.create')
   const navigate = useNavigate()
@@ -101,19 +107,22 @@ export function Planner({ day, onDayChange }: { day: string; onDayChange: (day: 
     attemptMove(s, { startAt, technicianId })
   }
 
-  const newBookingAt = (technicianId: string, minutes: number) => {
+  const newBookingAt = (_lane: string, minutes: number) => {
     if (!canBook) return
-    void navigate({ to: '/bookings/new', search: { tech: technicianId, day, time: fromMinutes(snap(minutes)) } })
+    void navigate({ to: '/bookings/new', search: { day, time: fromMinutes(snap(minutes)) } })
   }
 
   const dayCapacity = capacity.data?.data.find((c) => c.day === day)
+  // Arrows move a day, a week or a month at a time.
+  const step = (by: number) =>
+    view === 'day' ? addWorkingDays(day, by) : view === 'week' ? addWorkingDays(mondayOf(day), by * 5) : `${shiftMonth(month, by)}-01`
   const unassigned = all.filter((s) => s.booking.technicianIds.length === 0 && dayKey(s.booking.startAt) === day)
 
   return (
     <div className="pb-8">
       <PageHeader
         title="Workshop planner"
-        subtitle={view === 'day' ? formatDayLong(day) : `Week of ${formatDayLong(weekDays[0]!)}`}
+        subtitle={view === 'day' ? formatDayLong(day) : view === 'week' ? `Week of ${formatDayLong(weekDays[0]!)}` : monthLabel(month)}
         actions={
           canBook && (
             <Link
@@ -130,18 +139,16 @@ export function Planner({ day, onDayChange }: { day: string; onDayChange: (day: 
 
       <div className="flex flex-wrap items-center gap-2 px-4 pb-4 sm:px-6">
         <div className="flex items-center rounded-lg border">
-          <button type="button" aria-label="Previous day" className="flex size-touch items-center justify-center" onClick={() => onDayChange(addWorkingDays(day, view === 'day' ? -1 : -5))}>
+          <button type="button" aria-label={`Previous ${view}`} className="flex size-touch items-center justify-center" onClick={() => onDayChange(step(-1))}>
             <ChevronLeft className="size-5" aria-hidden="true" />
           </button>
-          <button type="button" className="min-h-touch border-x px-4 font-semibold" onClick={() => onDayChange(workingToday())}>
-            Today
-          </button>
-          <button type="button" aria-label="Next day" className="flex size-touch items-center justify-center" onClick={() => onDayChange(addWorkingDays(day, view === 'day' ? 1 : 5))}>
+          <DatePicker view={view} day={day} onPick={onDayChange} />
+          <button type="button" aria-label={`Next ${view}`} className="flex size-touch items-center justify-center" onClick={() => onDayChange(step(1))}>
             <ChevronRight className="size-5" aria-hidden="true" />
           </button>
         </div>
         <div className="flex rounded-lg border p-0.5" role="group" aria-label="View">
-          {(['day', 'week'] as const).map((v) => (
+          {(['day', 'week', 'month'] as const).map((v) => (
             <button
               key={v}
               type="button"
@@ -153,18 +160,18 @@ export function Planner({ day, onDayChange }: { day: string; onDayChange: (day: 
             </button>
           ))}
         </div>
-        <select aria-label="Filter by mechanic" value={techFilter} onChange={(e) => setTechFilter(e.target.value)} className={cn(fieldClass, 'h-11 w-auto')}>
+        <Select aria-label="Filter by mechanic" value={techFilter} onChange={(e) => setTechFilter(e.target.value)} className={cn(fieldClass, 'h-11 w-auto')}>
           <option value="all">All mechanics</option>
           {(technicians.data?.data ?? []).map((t) => (
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
-        </select>
-        <select aria-label="Filter by skill" value={skillFilter} onChange={(e) => setSkillFilter(e.target.value as 'all' | Skill)} className={cn(fieldClass, 'h-11 w-auto')}>
+        </Select>
+        <Select aria-label="Filter by skill" value={skillFilter} onChange={(e) => setSkillFilter(e.target.value as 'all' | Skill)} className={cn(fieldClass, 'h-11 w-auto')}>
           <option value="all">All skills</option>
           {skills.map((s) => (
             <option key={s} value={s}>{s[0]!.toUpperCase() + s.slice(1)}</option>
           ))}
-        </select>
+        </Select>
       </div>
 
       <div className="space-y-4 px-4 sm:px-6">
@@ -179,7 +186,9 @@ export function Planner({ day, onDayChange }: { day: string; onDayChange: (day: 
 
         <DataView query={schedule} loading={<Skeleton className="h-96" />}>
           {() =>
-            view === 'week' ? (
+            view === 'month' ? (
+              <MonthGrid month={month} capacity={capacity.data?.data ?? []} jobs={all} onPick={(d) => { onDayChange(d); setView('day') }} />
+            ) : view === 'week' ? (
               <WeekGrid days={weekDays} techs={techs} capacity={capacity.data?.data ?? []} jobs={all} onPick={(d) => { onDayChange(d); setView('day') }} />
             ) : techs.length === 0 ? (
               <Card>
@@ -509,11 +518,11 @@ function UnassignedDrawer({ jobs, canMove, onOpen }: { jobs: ScheduledJob[]; can
     <section ref={setNodeRef} className={cn('rounded-xl border-2 border-dashed p-3', isOver && 'border-primary bg-accent')}>
       <h2 className="mb-2 flex items-center gap-2 text-xl">
         <UserRoundX className="size-5" aria-hidden="true" />
-        Unassigned jobs
+        Waiting for a mechanic
         <span className="tabular rounded-full bg-secondary px-2 text-base">{jobs.length}</span>
       </h2>
       {jobs.length === 0 ? (
-        <p className="text-muted-foreground">Every job for this day has a mechanic. Drag a job here to unassign it.</p>
+        <p className="text-muted-foreground">Nothing booked for this day is waiting for a mechanic.</p>
       ) : (
         <ul className="flex flex-wrap gap-2">
           {jobs.map((s) => (
@@ -695,27 +704,27 @@ function BookingPreview({
           <fieldset className="space-y-3 border-t pt-4">
             <legend className="font-display text-xl font-medium">Move or resize</legend>
             <Field label="Mechanic">
-              <select className={fieldClass} value={tech} onChange={(e) => setTech(e.target.value)}>
+              <Select className={fieldClass} value={tech} onChange={(e) => setTech(e.target.value)}>
                 <option value="">Unassigned</option>
                 {technicians.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Start">
-                <select className={fieldClass} value={time} onChange={(e) => setTime(e.target.value)}>
+                <Select className={fieldClass} value={time} onChange={(e) => setTime(e.target.value)}>
                   {times.map((t) => (
                     <option key={t} value={t}>{formatTime(t)}</option>
                   ))}
-                </select>
+                </Select>
               </Field>
               <Field label="Hours">
-                <select className={fieldClass} value={hours} onChange={(e) => setHours(Number(e.target.value))}>
+                <Select className={fieldClass} value={hours} onChange={(e) => setHours(Number(e.target.value))}>
                   {durations.map((d) => (
                     <option key={d} value={d}>{formatHours(d)}</option>
                   ))}
-                </select>
+                </Select>
               </Field>
             </div>
             <Button

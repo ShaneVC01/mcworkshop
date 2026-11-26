@@ -190,8 +190,10 @@ export function formatKm(km?: number) {
 }
 
 /** 3.5 h */
+/** 1.5 h, or 0.15 h and 1.75 h when the time needs two places (short fitting jobs). */
 export function formatHours(hours: number) {
-  return `${hours.toFixed(1)} h`
+  const r = Math.round(hours * 100) / 100
+  return `${Number.isInteger(Math.round(r * 100) / 10) ? r.toFixed(1) : r.toFixed(2)} h`
 }
 
 /** 3 h 30 min */

@@ -4,7 +4,7 @@
  */
 import { useEffect } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
-import type { AvailabilityRequest, Id, LibraryFilters, Result } from '@/types'
+import type { AvailabilityRequest, BookingExtra, BookingItem, Id, LibraryFilters, Result } from '@/types'
 import { subscribe } from './mock/store'
 import * as live from './live-library'
 import * as q from './queries'
@@ -61,7 +61,28 @@ export const useVehicles = (query: string) => useData(['vehicles', query], () =>
 export const useVehicle = (id: Id) => useData(['vehicle', id], () => q.getVehicle(id))
 export const useVehicleTimeline = (id: Id) => useData(['vehicle-timeline', id], () => q.getVehicleTimeline(id))
 
-export const useSchedule = (fromDay: string, toDay: string) =>
+export const useBookingCustomers = (query: string) =>
+  useData(['booking-customers', query], () => q.findBookingCustomers(query), query.trim().length >= 2)
+export const useBookingCustomer = (customerId: Id | undefined) =>
+  useData(['booking-customer', customerId], () => q.getBookingCustomer(customerId!), Boolean(customerId))
+export const useDuplicateCustomers =(input: Parameters<typeof q.findDuplicateCustomers>[0]) =>
+  useData(['duplicates', input], () => q.findDuplicateCustomers(input), Object.values(input).some((v) => (v ?? '').trim().length >= 3))
+export const useBookingHistory = (vehicleId: Id | undefined) =>
+  useData(['booking-history', vehicleId], () => q.getBookingHistory(vehicleId!), Boolean(vehicleId))
+export const useServiceSuggestions = (vehicleId: Id | undefined, odometerKm?: number) =>
+  useData(['suggestions', vehicleId, odometerKm], () => q.getServiceSuggestions(vehicleId!, odometerKm), Boolean(vehicleId))
+export const useBookingEstimate = (vehicleId: Id | undefined, templateIds: Id[], extras: BookingExtra[], items: BookingItem[] = []) =>
+  useData(['estimate', vehicleId, templateIds, extras, items], () => q.getBookingEstimate(vehicleId!, templateIds, extras, items),
+    Boolean(vehicleId) && templateIds.length + extras.length + items.length > 0)
+export const useItems = () => useData(['items'], q.getItems)
+export const useItemSearch = (query: string) =>
+  useData(['item-search', query.trim().toLowerCase()], () => q.searchItems(query), query.trim().length > 0)
+export const useMonthAvailability = (request: AvailabilityRequest | null, month: string) =>
+  useData(['month-availability', request, month], () => q.getMonthAvailability(request!, month), request !== null)
+export const useDayAvailability = (request: AvailabilityRequest | null, day: string | undefined) =>
+  useData(['day-availability', request, day], () => q.getDayAvailability(request!, day!), request !== null && Boolean(day))
+
+export const useSchedule =(fromDay: string, toDay: string) =>
   useData(['schedule', fromDay, toDay], () => q.getSchedule(fromDay, toDay))
 export const useCapacity = (days: string[]) => useData(['capacity', ...days], () => q.getCapacity(days))
 export const useAvailability = (request: AvailabilityRequest | null) =>
@@ -71,6 +92,8 @@ export const useBookings = () => useData(['bookings'], q.getBookings)
 export const useBooking = (id: Id) => useData(['booking', id], () => q.getBooking(id))
 export const useJobCard = (id: Id) => useData(['booking', id], () => q.getJobCard(id))
 export const useWorkshopBoard = (day: string) => useData(['board', day], () => q.getWorkshopBoard(day))
+export const useAssignPlan = (jobId: Id | undefined, day: string) =>
+  useData(['assign-plan', jobId, day], () => q.getAssignPlan(jobId!, day), Boolean(jobId))
 export const useMyDay = (technicianId: Id | undefined, day: string) =>
   useData(['my-day', technicianId, day], () => q.getMyDay(technicianId!, day), Boolean(technicianId))
 export const useCompletedJobs = (technicianId: Id | undefined) =>
@@ -83,3 +106,6 @@ export const useActivity = (jobId: Id) => useData(['activity', jobId], () => q.g
 export const useTodaySummary = (day: string) => useData(['today', day], () => q.getTodaySummary(day))
 export const useUtilisationReport = () => useData(['utilisation'], q.getUtilisationReport)
 export const useSyncLog = () => useData(['sync-log'], q.getSyncLog)
+
+export const usePartOrders = () => useData(['part-orders'], q.getPartOrders)
+export const useJobPartOrders = (jobId: Id) => useData(['part-orders', jobId], () => q.getJobPartOrders(jobId))

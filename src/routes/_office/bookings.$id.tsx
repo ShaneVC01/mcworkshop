@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { CalendarClock, Check, ExternalLink, LogIn, MessageSquare, Phone, Send, ThumbsDown, ThumbsUp } from 'lucide-react'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import {
+  CalendarClock, Check, ChevronLeft, ExternalLink, LogIn, MessageSquare, Phone, Send, ThumbsDown, ThumbsUp, UserRoundPen, UserRoundPlus,
+} from 'lucide-react'
 import { useCan } from '@/auth/permissions'
 import { Card, JobFlags, JobStatusPill } from '@/components/domain/job-bits'
 import { RegoPlate } from '@/components/domain/rego-plate'
@@ -14,13 +16,15 @@ import {
   addFindingToQuote, approveQuote, cancelBooking, checkInVehicle, declineQuote, moveJobStatus, sendQuoteForApproval,
 } from '@/data/actions'
 import { useAction, useActivity, useBooking, useInvoiceSummary, useQuote, useVehicleTimeline } from '@/data/hooks'
+import { AssignSheet } from '@/features/workshop/assign-sheet'
 import {
   dayKey, formatDate, formatDateTime, formatDayRelative, formatDuration, formatHours, formatMoney, formatTime,
-  minutesBetween, nowIso,
+  minutesBetween, nowIso, workingToday,
 } from '@/lib/format'
-import { JOB_STATUS_LABEL, TRANSITIONS } from '@/lib/job-state'
+import { ASSIGN_ONLY, JOB_STATUS_LABEL, TRANSITIONS } from '@/lib/job-state'
 import { cn } from '@/lib/utils'
 import type { ApprovalStatus, Finding, JobCard, JobStatus, QuoteLine, ScheduledJob, Totals } from '@/types'
+import { Select } from '@/components/ui/fields'
 
 export const Route = createFileRoute('/_office/bookings/$id')({ component: BookingPage })
 
@@ -46,7 +50,8 @@ function BookingPage() {
   const [tab, setTab] = useState<Tab>('Overview')
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pt-5 pb-10 sm:px-6">
+    <div className="mx-auto max-w-5xl px-4 pt-3 pb-10 sm:px-6">
+      <BackButton fallbackDay={booking.data ? dayKey(booking.data.data.booking.startAt) : undefined} />
       <DataView query={booking} loading={<Skeleton className="h-64" />}>
         {(s, sync) => (
           <>
@@ -89,10 +94,33 @@ function BookingPage() {
   )
 }
 
+/**
+ * Back to wherever the booking was opened from: the workshop board, the calendar, a vehicle, search.
+ * Opened from a link with no history, it goes to the calendar on the booking's day.
+ */
+function BackButton({ fallbackDay }: { fallbackDay?: string }) {
+  const navigate = useNavigate()
+  // A booking opens from many places (board, mechanics view, calendar, search), so Back is the browser's back.
+  // Only a booking opened in a fresh tab falls back to its day on the calendar.
+  return (
+    <button
+      type="button"
+      onClick={() => (window.history.length > 1 ? window.history.back() : void navigate({ to: '/calendar', search: { day: fallbackDay } }))}
+      className="-ml-2 mb-2 inline-flex min-h-touch items-center gap-1 rounded-lg px-2 font-display text-lg font-medium hover:bg-secondary"
+    >
+      <ChevronLeft className="size-6" aria-hidden="true" />
+      Back
+    </button>
+  )
+}
+
 function Header({ s, sync }: { s: ScheduledJob; sync: 'synced' | 'pending' | 'failed' }) {
   const { vehicle, customer, job, booking, technicians, bay } = s
   const canMove = useCan('booking.move')
+  const canArrive = useCan('board.move')
+  const canAssign = useCan('job.assign')
   const checkIn = useAction(checkInVehicle)
+  const [assigning, setAssigning] = useState(false)
   const mobile = customer.mobile.replace(/\s/g, '')
   const action = 'inline-flex min-h-touch items-center gap-2 rounded-lg border-2 border-foreground px-4 font-display font-semibold tracking-[0.06em] uppercase hover:bg-secondary'
   return (
@@ -124,10 +152,16 @@ function Header({ s, sync }: { s: ScheduledJob; sync: 'synced' | 'pending' | 'fa
         <JobFlags s={s} />
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        {['BOOKED', 'CONFIRMED'].includes(job.status) && canMove && (
+        {['BOOKED', 'CONFIRMED'].includes(job.status) && canArrive && (
           <Button disabled={checkIn.isPending} onClick={() => void checkIn.run(job.id).catch(() => undefined)}>
             <LogIn aria-hidden="true" />
-            Check in vehicle
+            Vehicle arrived
+          </Button>
+        )}
+        {['CHECKED_IN', 'READY_FOR_WORK'].includes(job.status) && canAssign && (
+          <Button variant={job.status === 'READY_FOR_WORK' ? 'outline' : 'primary'} onClick={() => setAssigning(true)}>
+            {job.status === 'READY_FOR_WORK' ? <UserRoundPen aria-hidden="true" /> : <UserRoundPlus aria-hidden="true" />}
+            {job.status === 'READY_FOR_WORK' ? 'Reassign' : 'Assign'}
           </Button>
         )}
         <a href={`tel:${mobile}`} className={action}>
@@ -152,6 +186,7 @@ function Header({ s, sync }: { s: ScheduledJob; sync: 'synced' | 'pending' | 'fa
       <div className="mt-2">
         <ActionError error={checkIn.error} />
       </div>
+      {assigning && <AssignSheet jobId={job.id} day={workingToday()} onClose={() => setAssigning(false)} />}
     </header>
   )
 }
@@ -162,7 +197,8 @@ function Overview({ s }: { s: ScheduledJob }) {
   const move = useAction(moveJobStatus)
   const cancel = useAction(cancelBooking)
   const [next, setNext] = useState<JobStatus | ''>('')
-  const options = TRANSITIONS[job.status]
+  // Assigned is set by Assign, which picks the mechanic and the time.
+  const options = TRANSITIONS[job.status].filter((o) => !ASSIGN_ONLY.includes(o))
   return (
     <div className="grid gap-5 @3xl:grid-cols-2">
       <Card className="p-4">
@@ -190,12 +226,12 @@ function Overview({ s }: { s: ScheduledJob }) {
           <div className="mt-4 border-t pt-4">
             <Field label="Change status">
               <div className="flex gap-2">
-                <select className={fieldClass} value={next} onChange={(e) => setNext(e.target.value as JobStatus)}>
+                <Select className={fieldClass} value={next} onChange={(e) => setNext(e.target.value as JobStatus)}>
                   <option value="">Choose a status</option>
                   {options.map((o) => (
                     <option key={o} value={o}>{JOB_STATUS_LABEL[o]}</option>
                   ))}
-                </select>
+                </Select>
                 <Button variant="dark" disabled={!next || move.isPending} onClick={() => next && void move.run(job.id, next).then(() => setNext('')).catch(() => undefined)}>
                   Update
                 </Button>
