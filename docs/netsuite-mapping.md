@@ -154,7 +154,21 @@ A 6 minute screen recording by a 4WD salesperson, with no narration, so everythi
 | 8 | Enters Estimated Effort (man hours) of 66, using the Windows calculator | `custevent_nxc_est_hours` (required) | Total hours are worked out by hand and not checked against the tasks |
 | 9 | Adds tasks in the case's "Add Tasks" panel, one trade at a time | Per row: type Workshop, skill (picking Fitter filters Assigned to "5 available"), assignee, start and end date, start and end time, daily estimated hours (`custevent_nxc_task_dailyestimatedhours`), Confirmed Booking (`custevent_nx_task_booking_confirmed`, left unticked) and a message (`message`) | **One date range becomes one task per working day.** A fitter got 6 daily tasks at 7:00 to 4:00 and 7 hours (weekend skipped). An auto electrician got 4 daily tasks with 4, 7, 7 and 6 hours, starting on the fitter's last day |
 | 10 | Splits the work list between the trades | The task message is edited per trade: fitting lines to the fitter, electrical lines to the auto electrician | The trade split lives only in free text. Line breaks are lost in the task list ("Fit BullbarFit Lightbar...") |
-| 11 | Reconciles hours with the calculator, then goes back to the sales order lines | Read only | Checks the booked hours against the hours sold on the order. Saving the case is not shown in the recording |
+| 11 | Reconciles hours with the calculator, then goes back to the sales order lines | Read only | Checks the booked hours against the hours sold on the order. Saving is not shown in this recording, but it is in the narrated re-recording below |
+
+### Narrated re-recording (video of 20/11/2026, 10:51 AM)
+
+The booking was recorded again with sound ("redone the video as the audio did not work on the first video") and this time saved. It confirms the steps above and answers most of the questions below. Where this list and the tables differ, this list wins.
+
+1. **Hours and days are worked out on paper first:** about 66 hours, "approximately 10 days worth of work for the workshop".
+2. **Finding the start date:** the booker pages the scheduler week by week from the earliest date the customer can do (here 1 February 2027) until the right fitters are free. Only some fitters do this kind of job ("only ever go under someone like Jordan, Josh, or potentially Elvis"), so suitability by job type matters as well as skill.
+3. **The workbook is a cross check,** "just to cross check that someone hasn't made a booking and it just hasn't ported over properly or they haven't set it up properly". Zero hours on a day means the fitter is free. After saving, the booker checks the new hours appear there too.
+4. **SMS Job Confirmation sends a text on save** telling the customer the job is booked to start on the start date. Answers G9: the case flag triggers the booking text, through the SMS app seen in the invoice walkthrough.
+5. **Assigned on the case is "the person in charge of the job"** (the salesperson). Answers G10.
+6. **Job end is the customer's collection date, not the end of the work.** Work was planned to finish on 26 February, but the job end and collection were set to 2 March. That leaves time for a full check over, a detail and clean, and a buffer for delays. The app needs a collection date separate from the last work day.
+7. **The workshop starts at 7:00 and a booked day is 7 hours** (7:00 to 4:00 pm). A fitter with 5.5 days of work gets 5 days at 7 hours and the remainder (4 hours) on the next working day. The auto electrician gets about 3 days the same way.
+8. **Saving the case creates the tasks and the project.** The Project field changed from "New: Billable" to "Billable : 15/02/2027 AEST" after the tasks were added, so a billable project is created per job and named by its start date. Answers part of G11. The scheduler then shows one bar per person per day.
+9. **The point of the scheduler and workbook is utilisation:** "everyone in the company can see what work is booked in and who's got what", and spare hours per person per day show where more work fits.
 
 ### Gaps: what the app must do in NetSuite for this flow
 
@@ -275,6 +289,61 @@ A 3 minute recording, narrated by the mechanical service advisor, on the same te
 3. Which SMS service is behind Conversations, and can other systems send through it?
 4. Is "Mech Report Items" used to text the inspection findings, and when?
 5. Is the Thank you + Review text sent after payment, and by whom?
+
+## Walkthrough: the mechanic's tablet during a service (video "FSM, car service")
+
+A 7 minute screen recording of the NetSuite FSM mobile app ("Field Service", the NextService app) on the workshop iPad, with no sound. It shows the mechanic doing test job 17089 from 8:23 to 8:29 am: start, the service checklist, the completion note and complete. This is the screen our mechanic view replaces. Field IDs are to confirm unless stated.
+
+### What the mechanic does, step by step
+
+| # | Time | Screen | What is entered | What it tells us |
+|---|---|---|---|---|
+| 1 | 0:00 | **Task list** beside a street map | Tasks grouped by day. Each shows priority, time slot, "SERVICE" and the customer, task number, vehicle and rego, "BAY:" with the mechanic's name, and Not Started or Completed | The list is a field service list built for travelling technicians. The map has no use in a workshop |
+| 2 | 0:20 | **Task detail**, then Start | Case number, case type, case details, task number, type and details. Start stamps 8:23 AM and the task goes In Progress | One tap to start |
+| 3 | 0:25 | **Time** opens on start | A time entry: Item "Workshop Labour \*DO NOT USE\*" (preset, cannot be changed), Hours 0.25 (preset), Description, Start Current Activity ticked with the start stamp, End Current Activity unticked | **Explains the discovery finding** that every time bill uses that item, with hours that do not match the real time |
+| 4 | 0:40 | Task menu | Time, Vehicle Details, Contacts, Service History, Sales Order, Service Record, Task Status, Files, and Job Completion & Signatures (locked until complete) | The mechanic can see the sales order and service history on the tablet |
+| 5 | 0:45 | **Service Record** (the checklist) | Every item is required. Pass, Fail or N/A pick lists, typed measurements and notes, in five sections (below) | About 50 required fields, all typed on the on screen keyboard. It took the mechanic about 4 minutes on a job with nothing wrong |
+| 6 | 4:15 | End of the Service Record | General Job Notes, Technician Name (pick list), **Signature** drawn with a finger (required), Date | The checklist is signed by the mechanic |
+| 7 | 4:40 | **Task Status** | Actions Taken (free text: oil litres and grade, filter part, "Replaced park light bulb", odometer in km). Result: All Works Completed, More To Do, or More To Do, Task Created. Not Executed Reason: Additional Parts/Labour Required | The odometer only exists inside this text. It is why the advisor retypes it onto the vehicle |
+| 8 | 5:40 | Complete | Warning "Some time entries are missing end timestamps". The mechanic goes back to Time, ticks End Current Activity (8:29) and completes. Task shows Completed 8:23 to 8:29 | **Stopping the clock is a separate step** the app nags about. Easy to forget |
+| 9 | 6:40 | **Files** | Upload a file (10 MB max) with a required description. Opened but not used | Photos are possible but not part of the routine |
+
+**The checklist (Service Record) sections and items**
+
+| Section | Items | Kind |
+|---|---|---|
+| Road test | Wipers, Air Con H, Air Con C, Wheel Alignment, Lights On Dash, 4WD Operation, then Notes/Noises | Pass, Fail, N/A and a note |
+| Lights check | Indicators, Park Lights, Low Beam, High Beam, Brake Lights, Reverse Lights, Fog Lights, Spotlights/Lightbar, then Lights Check Notes | Pass, Fail, N/A and a note |
+| Under bonnet | Brake Fluid, Washer Bottle, Cooling System, Power Steer, Drivebelts, Spark Plugs, Air Filter, Cabin Filter, MAF Sensor, Battery Actual CCA, Battery Specified CCA | Pass, Fail, N/A. CCA values typed |
+| Under vehicle checks | Brake Pads Front and Rear, Brake Rotors Front and Rear, Rotor Diameter, Steering, Suspension, Driveline, Engine/Gearbox Mounts, Front and Rear Diff Oils, Auto Transmission/Gearbox Oil, Transfer Case Oil, Exhaust | Pads and rotors are **free text** ("6mm both sides", "G"). The rest Pass, Fail, N/A |
+| Stage 5 checklist, tyres | Size/Tread Pattern, PSI Before and After for LF, RF, LR, RR and spare, Tread depth for the same five, Tyres Notes | All free text, up to 300 characters ("38", "7mm") |
+| Sign off | General Job Notes, Technician Name, Signature, Date | Text, pick list, drawn signature |
+
+### Gaps: what our mechanic view must do
+
+| Gap | Today on the tablet | What our app needs | NetSuite action and direction | Status |
+|---|---|---|---|---|
+| M1. Checklist content | Five sections, about 50 required items | Seed our default service checklist with these sections and items so nothing the workshop relies on is lost. Our `ChecklistItem` needs sections, a third result (N/A) and per wheel readings | **Write** results to the FSM service record so the Job Service Report still prints, or print our own report. Record type to find (the service record behind the "Service Record" tab on the case) | Decide with R1 and R2 |
+| M2. Readings as numbers | Pads, rotors, pressures, tread and CCA typed as text ("6mm both sides") | Number pads with units and quick values (before and after pressure side by side, the same value for all four wheels in one tap). Pass or fail can follow from limits (pads under 3 mm, tread under 3 mm) | Write as text in the FSM format if written back | App design |
+| M3. Speed | Every field required, typed on a keyboard | Big Pass buttons per section with "all pass" for the section, and only failures need a note or photo | None | App design, the main win for mechanics |
+| M4. Time clock | Start opens a time entry. Ending it is a separate tick, and the item and 0.25 h are preset | Starting and completing the job starts and stops the clock. Pausing (waiting parts, lunch) is one tap | **None as it happens.** Times stay in Supabase (see "NetSuite independence" in supabase-handover.md). At completion, the total can go with the completion event if FSM time bills are still wanted. Never write `timebill` directly | Decide whether FSM time bills are still needed |
+| M5. Completion | Actions Taken free text, Result and Not Executed Reason | Separate fields for oil grade and litres, filter part, extras and odometer, plus Result and reason from fixed lists. The app composes the Actions Taken text in the same order | **Write** `custevent_nx_actions_taken`, `custevent_nxc_task_result`, `custevent_nxc_reason_not_resolved` through the RESTlet | Field IDs confirmed in the schema. Value lists to read |
+| M6. Odometer | Only inside Actions Taken | Its own required field at completion, checked against the last reading | **Write** the vehicle (`custrecord_nxc_na_odometerunit`) and the case (`custevent_odometer_reading`) | Removes the advisor's retyping (walkthrough R7) |
+| M7. Signature | Drawn signature on the checklist | The signed in mechanic is the sign off, recorded in the activity log. Ask whether a drawn signature is still wanted on the printed report | None, or an image on the report | Ask |
+| M8. Photos | Files, with a required description, rarely used | Photos on a failed item or finding, one tap, no description needed | **Write** to the File Cabinet on the case later, or keep in Supabase Storage with a link | As already planned for findings |
+| M9. What the mechanic sees | Task list with a map; sales order and service history in the menu | The bay or lane list for today, no map. Service history and the vehicle's service notes on the job. Order lines without prices | **Read** only | Mechanics see no money (RLS) |
+| M10. Findings to the advisor | None. The advisor reads the printed report and spots the Fails | Each Fail becomes a finding the advisor sees straight away, with the suggested part and labour, ready for the phone call and approval (R3a) | None until approved | Our finding flow already does this |
+
+### Questions for the customer
+
+1. Must the Job Service Report keep printing from NetSuite, or can our app produce it?
+2. Which checklist items are on every service, and which only on some vehicles (4WD Operation, Transfer Case Oil, Spotlights)?
+3. Is a drawn mechanic signature needed, and is the customer signature (Job Completion & Signatures) used?
+4. What limits make a pad, rotor or tread reading a Fail?
+
+## What the walkthroughs change in the design
+
+The design changes that follow from the walkthroughs (trade blocks, collection date, booking from a sold order, approvals, parts receipts, who invoices, customer messages and the mechanic's tablet) are collected in [supabase-handover.md](supabase-handover.md), "Target design changes from the NetSuite walkthroughs".
 
 ## Integration pathways
 

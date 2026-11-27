@@ -106,6 +106,121 @@ Each business use case is its own Edge Function, a custom API endpoint that call
 
 Each synced table carries `netsuite_id`, `sync_status`, `last_synced_at` and `division`.
 
+## NetSuite independence (architecture principle, 27/11/2026)
+
+**NetSuite remains the system of record** for customers, vehicles, servicing, parts, bookings, quotes, invoicing and all financials. Other parts of the business rely on it, so every significant business change made in the app must reach NetSuite and leave it complete and correct. The app must still work 100% without a live connection to NetSuite, and NetSuite may be replaced later. This overrides anything below that implies the app waits on NetSuite.
+
+| Rule | Detail |
+|---|---|
+| Supabase holds a working copy plus app-only detail | Every screen reads from Supabase and every save writes to Supabase. No screen or RPC ever calls NetSuite on the request path. For core records the copy is authoritative only until the queued change has reached NetSuite |
+| Inbound data is copied in | Customers, vehicles, items, sales orders, purchase orders, invoices, payments and messages are pulled by `netsuite-sync` into Supabase tables keyed by `netsuite_id`. If the sync stops, the app shows the last copy and keeps working |
+| Attachments live in Supabase Storage | Photos, files and signatures are stored in Supabase. Sending a copy or a link to NetSuite is an optional outbox event, never the primary store |
+| Outbox on every save | The RPC that saves also inserts an `outbox` event in the same transaction: aggregate (job, booking, customer), sequence number, event type, payload in our own field names, idempotency key |
+| Replay in order | The worker sends events per aggregate in sequence. Before sending, it rebuilds the payload from the current Supabase state and checks it is still valid (the booking still exists, the job is not cancelled, the line was not removed). Superseded events are collapsed so NetSuite gets the latest state, not every step. A failed event blocks later events for the same aggregate only, and is shown as Not saved, retrying |
+| Offline from NetSuite | When NetSuite is unreachable the queue holds. Staff carry on. When it returns, the queue drains in order. An admin view shows the backlog and failures |
+| Only significant changes go to NetSuite | Customer or vehicle created or changed, booking made or its date changed, mechanic assigned for the day, job done (with the completion summary), extra work approved (new order lines), ready to invoice. Not sent: start and finish stamps, pauses, each drag and drop move, checklist item results, photos, notes and approvals detail. These stay in Supabase and reach NetSuite only as a summary at the next significant change |
+| Gaps are expected | The app holds far richer data than NetSuite (time per job, schedule history, checklist readings, approvals, message replies). Data with no NetSuite home stays in Supabase. Mapping lives only in the integration layer (`_shared/netsuite` and the outbox mappers), so a replacement system needs new mappers, not app changes |
+| Inbound conflicts | NetSuite is the record. Inbound changes always update the copy. If the same field also has a pending app change, the event is held and flagged for a person to resolve, never silently overwriting NetSuite. Invoice, payment, stock and financial fields are only ever read. App-only fields have no NetSuite side and cannot conflict. Conflicts are logged in `activity_events` |
+| NetSuite stays complete | A significant change is not finished until NetSuite has it. The admin view lists anything pending or failed so finance never works from an incomplete NetSuite |
+
+Effect on the walkthrough proposals below: time clock events, schedule moves and checklist detail are stored in Supabase and are **not** written to NetSuite as they happen. The FSM tasks are created or updated only at the significant points above, and the completion summary (Actions Taken, Result, odometer) is sent once when the job is done.
+
+## Target design changes from the NetSuite walkthroughs (20/11/2026)
+
+Five recorded walkthroughs of how staff work in NetSuite today, including the mechanic's FSM tablet, are analysed in [netsuite-mapping.md](netsuite-mapping.md) (gap IDs G, R, I and M below). This section turns them into changes for the final system. **All proposed. No table is created until Shane asks** (CLAUDE.md, architecture rule 6), and every NetSuite write stays dry run until approved.
+
+### 1. Bookings become trade blocks (G3, G4, G7, G8)
+
+A large job is not one mechanic in one slot. It is several blocks, one per trade and person, each spread over working days.
+
+| Change | Detail |
+|---|---|
+| New table `booking_blocks` | `booking_id`, `skill`, `technician_id`, `start_date`, `end_date`, `day_start` (default 07:00), `day_end` (default 16:00), `daily_hours` (default 7), `work_lines` (the part of the job's work list for this trade), `sort` |
+| Expansion rule | A block becomes one NetSuite task per working day for that person. Skip weekends, closed days and the person's leave. Hours that do not fill a day go on the next working day (5.5 days becomes 5 full days and a 4 hour day). The expansion is a pure function in `src/lib/capacity.ts` so the planner and the writer agree |
+| Booking totals | `est_effort_hours` is the sum of the blocks, not typed. `work_start` and `work_end` come from the first and last block day |
+| Collection date | New `bookings.collect_at`, separate from `work_end`. Default: a setting `collect_buffer_days` (3 working days on the large fitment seen) for check over, detail and delays. The customer is told this date, and the case job end is set to it |
+| Suitability | New `technician_skills` (technician, skill) and `job_type_technicians` (job type, technician) so the planner offers only people who do that kind of job ("only Jordan, Josh or Elvis") |
+| Capacity read | `getCapacityBySkill(range)`: booked hours per technician per day against their bookable day (7 hours), grouped by skill. Replaces the "Daily Task Workbook" cross check. Spare hours per day are shown, since that is how they find room |
+| Leave | `technician_unavailability` synced from the FSM non working day records (to confirm), shown as blocks on lanes |
+| Phase | Needed for the custom build division (McCormack's 4WD). The servicing division keeps single block bookings, so build the table now and use one block per booking until then |
+
+### 2. Booking starts from a sold order (G1, G2, G12)
+
+| Change | Detail |
+|---|---|
+| New synced tables `sales_orders`, `sales_order_lines` | Read through `netsuite-sync`. Status, department, deposit taken, lines with item, quantity, back ordered and committed |
+| `getBookableOrders()` | Open 4WD orders with no job yet. "Book this order" seeds the work list from the order lines and the hours from the labour lines |
+| `bookings.sales_order_id` | The case is created with `custevent_nx_case_transaction` set |
+| Deposit | Read `customerdeposit` and show it on the booking. Never taken from the app |
+
+### 3. Job ownership and case fields (G9, G10, G11)
+
+| Change | Detail |
+|---|---|
+| `job_cards.owner_staff_id` | The person in charge of the job: the salesperson on 4WD jobs, the advisor or workshop manager on Mechanical. Sent as `assigned` on the case |
+| Booking text | The case flag `custevent_sms_job_confirm` makes NetSuite text the customer on save. The app sets the flag and **does not send its own booking text**, so the customer never gets two |
+| Project | NetSuite creates a billable project per case on save. The writer must send whatever the form sends for "New: Billable". Confirm with one approved test write |
+
+### 4. Service close out on the Mechanical side (R1 to R11)
+
+| Change | Detail |
+|---|---|
+| Sales order timing | Today the order is created from the case after the service. Proposal: create it at booking from the service lines, so extra work and parts attach to an order that already exists. **Needs a decision with the workshop** |
+| Completion entries pick items | The mechanic's completion fields (oil grade, litres, filter part, extras, odometer) map to items through a new app owned `oil_specs` table (grade to item, filter part to item), replacing the advisor's printed "oil sheet". The app proposes the real lines in place of the service group's placeholders |
+| Inspection readings | `checklist_items` gains numeric readings: tyre pressure before and after per wheel, tread depth per wheel, brake pad mm front and rear, battery actual and specified CCA. FSM already holds a checklist, so decide whether results are written to it (R1) |
+| Extra work and approval | New `job_approvals` (job, lines, amount inc GST, method: phone, text or in person, approved by name, recorded by, at). Approved findings become new lines on the existing sales order. NetSuite has nowhere to hold the approval, so it stays in the app and in `activity_events` |
+| Next service note | `job_cards.next_service_note`, written as a Note item line so it prints on the invoice |
+| Extra work task | A job can hold several bookings. A new booking `kind` of `extra_work` under the same job card, with hours from its labour lines and state Waiting parts until its parts are received |
+| Task completion | Completion writes task result, reason not resolved and actions taken through the RESTlet (pathway C). "More To Do" with "Additional Parts/Labour Required" when extra work is booked |
+| Vehicle details | Odometer and details captured at completion update `customrecord_nx_asset`. A new Edge Function `vehicle-lookup` fills make, model, body, fuel and transmission from the rego when a vehicle is added (the advisor asked for this) |
+
+### 5. Parts and suppliers (R5, R6, R9a, G13, I2)
+
+| Change | Detail |
+|---|---|
+| New synced tables `purchase_orders`, `purchase_order_lines`, `item_receipts` | Read only. Linked to the sales order line, so `part_orders` gets ordered, supplier and received from NetSuite |
+| Ordering stays in NetSuite | Staff keep using Add Items From Repco, Create PO and Send PO to Repco. The app shows what needs ordering and its state, and never places supplier orders |
+| Receive before bill | Ready to invoice is blocked (with an override for managers) while a fitted part's order line is not received, because today fulfilling first puts stock out of step |
+
+### 6. Invoice and payment (I1, I4, I5)
+
+| Change | Detail |
+|---|---|
+| Who invoices | The service advisor runs Fulfil and Save & Bill in NetSuite. Reception takes payment at collection. The app still never creates invoices |
+| New synced tables `item_fulfilments`, `customer_payments` | With `invoices`, these move the job to Invoiced, ready to collect, then Paid |
+| Job states | No new states. Ready to invoice is set by the advisor or manager after the checks. Invoiced and Paid are read from NetSuite |
+
+### 7. Customer messages (I6 to I9)
+
+| Change | Detail |
+|---|---|
+| New synced tables `customer_messages`, `message_templates` | From the SMS app behind the customer's "Conversations" (record types to find). Shown on the booking and job: booking texts, reminders, car ready, and the customer's replies, which feed the reply sorting already planned |
+| Car ready step | `markCarReady(jobId, contact)` records the phone call. If there was no answer it offers the "Mechanical: Car Ready Template" text |
+| Sending | One Edge Function `customer-message-send` per business action, through the SMS provider's API if it has one, behind `guardWrite` and dry run like a NetSuite write. Until the provider is known, the app reads the thread and staff send from NetSuite |
+
+### 8. Mechanic tablet replaces the FSM mobile app (M1 to M10)
+
+| Change | Detail |
+|---|---|
+| Checklist model | `ChecklistItem` gains `section` (Road test, Lights check, Under bonnet, Under vehicle, Tyres), `result` adds `na` beside pass and attention, and `position` (LF, RF, LR, RR, spare) for per wheel readings. Readings keep a number and `unit`, plus a `phase` (before, after) for tyre pressures. Each section has a notes field |
+| Default checklist | `service_templates` and `service_profiles` seed the five FSM sections and items, so the printed report can carry the same content. "All pass" per section; only a failure needs a note or photo, and a failure creates a finding |
+| Time clock | Start job starts the clock, complete stops it, and pausing is one tap. Stored in `time_entries` in Supabase only. At completion the job's total hours can go to NetSuite in the completion event if the workshop still wants FSM time bills. No preset 0.25 h and no end stamp to forget |
+| Completion record | New columns on the job card or booking: `odometer_km` (required, checked against the last reading), `oil_grade`, `oil_litres`, `oil_filter_item_id`, `extras` (text lines), `task_result` (all done, more to do, more to do with a task created) and `not_done_reason`. The app composes the Actions Taken text from them in the order staff are used to |
+| Write back | `job-complete` writes Actions Taken, Result and Reason to the task, the odometer to the vehicle and case, and optionally the checklist to the FSM service record (record type to find) |
+| Sign off | The signed in mechanic is the sign off, recorded in `activity_events`. Drawn signature only if the workshop says the report needs it |
+| RLS | Mechanics read the job's lines without prices and the vehicle's service history. Unchanged rule: no money columns for mechanics |
+
+### New Edge Functions and sync scope
+
+| Function | Purpose |
+|---|---|
+| `netsuite-sync` (extended) | Adds sales orders and lines, deposits, purchase orders and receipts, fulfilments, payments, leave, skills and messages |
+| `booking-write` | Creates or updates the case and expands blocks into tasks through the FSM RESTlet. Dry run first |
+| `job-complete` | Task completion fields through the RESTlet |
+| `sales-order-lines-write` | Adds approved extra lines and the next service note to an existing order |
+| `vehicle-lookup` | Vehicle details from rego and state |
+| `customer-message-send` | Template texts, once the SMS provider is known |
+
 ## RLS outline
 
 - All tables: authenticated staff only. No anonymous access.
